@@ -5,6 +5,7 @@ export const MUSCLE_GROUP_LABELS: Record<string, string> = {
   biceps: "Bíceps",
   triceps: "Tríceps",
   legs: "Quadríceps",
+  hamstrings: "Posterior de Coxa",
   glutes: "Glúteos",
   calves: "Panturrilha",
   abs: "Abdômen",
@@ -12,10 +13,12 @@ export const MUSCLE_GROUP_LABELS: Record<string, string> = {
   full_body: "Corpo Inteiro",
 };
 
-export const MUSCLE_GROUP_OPTIONS = Object.entries(MUSCLE_GROUP_LABELS).map(([value, label]) => ({
-  value,
-  label,
-}));
+export const MUSCLE_GROUP_OPTIONS = Object.entries(MUSCLE_GROUP_LABELS)
+  .filter(([value]) => value !== "cardio" && value !== "full_body")
+  .map(([value, label]) => ({
+    value,
+    label,
+  }));
 
 // Ordem de exibição na biblioteca de exercícios: peito, costas, ombros,
 // braços (bíceps/tríceps), pernas — depois os grupos secundários.
@@ -26,6 +29,7 @@ export const MUSCLE_GROUP_ORDER = [
   "biceps",
   "triceps",
   "legs",
+  "hamstrings",
   "glutes",
   "calves",
   "abs",
