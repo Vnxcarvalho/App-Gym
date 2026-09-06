@@ -1011,7 +1011,7 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
           />
 
           {restRemaining !== null && restRemaining > 0 && (
-            <View style={[styles.restBar, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
+            <View style={[styles.restBar, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%", marginBottom: 64 }]}>
               <View style={styles.restBarTopRow}>
                 <View style={styles.restBarLabelRow}>
                   <Ionicons name="timer-outline" size={16} color={COLORS.accent} />
@@ -1048,8 +1048,8 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
             </View>
           )}
 
-          <View style={[styles.footerBar, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
-            <View style={styles.footerActions}>
+          <View pointerEvents="box-none" style={[styles.footerBar, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
+            <View pointerEvents="box-none" style={styles.footerActions}>
               {isEditing ? (
                 <Pressable
                   style={({ pressed }) => [
@@ -1185,7 +1185,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingBottom: 88,
   },
   topFieldsRow: {
     flexDirection: "row",
@@ -1653,11 +1653,10 @@ const styles = StyleSheet.create({
     color: "#FFF",
   },
   footerBar: {
+    position: "absolute",
+    bottom: 12,
+    zIndex: 10,
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
   },
   addExerciseButton: {
     flexDirection: "row",
