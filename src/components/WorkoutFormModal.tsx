@@ -583,31 +583,7 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
               }}
             </Pressable>
             <Text style={styles.headerTitle}>{isEditing ? "Editar treino" : "Novo treino"}</Text>
-            <Pressable
-              style={({ pressed }) => [
-                styles.headerButton,
-                canSave ? styles.headerButtonEnabled : styles.headerButtonDisabled,
-                canSave && (pressed || hoveredControl === "header-save") && styles.headerButtonPressed,
-              ]}
-              onPress={handleSave}
-              disabled={!canSave || saving}
-              {...hoverHandlers("header-save")}
-              hitSlop={8}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <Text
-                  style={[
-                    styles.headerButtonText,
-                    styles.saveText,
-                    canSave ? styles.saveTextActive : styles.saveTextDisabled,
-                  ]}
-                >
-                  Salvar
-                </Text>
-              )}
-            </Pressable>
+            <View style={styles.headerSpacer} />
           </View>
 
           <FlatList
@@ -1027,20 +1003,10 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
               </View>
             }
             ListFooterComponent={
-              isEditing ? (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.headerButton,
-                    styles.headerButtonEnabled,
-                    styles.deleteButton,
-                    (pressed || hoveredControl === "delete-workout") && styles.headerButtonPressed,
-                  ]}
-                  onPress={handleDelete}
-                  {...hoverHandlers("delete-workout")}
-                >
-                  <Text style={[styles.headerButtonText, styles.saveTextActive]}>Excluir treino</Text>
-                </Pressable>
-              ) : null
+              <Pressable style={styles.addExerciseButton} onPress={() => setPickerVisible(true)}>
+                <Ionicons name="add" size={18} color={COLORS.accent} />
+                <Text style={styles.addExerciseText}>Adicionar exercício</Text>
+              </Pressable>
             }
           />
 
@@ -1082,13 +1048,47 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
             </View>
           )}
 
-          {/* Fora da FlatList e sempre visível — numa lista longa de exercícios,
-              o botão de adicionar não deve exigir rolar até o fim pra ser alcançado. */}
           <View style={[styles.footerBar, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
-            <Pressable style={styles.addExerciseButton} onPress={() => setPickerVisible(true)}>
-              <Ionicons name="add" size={18} color={COLORS.accent} />
-              <Text style={styles.addExerciseText}>Adicionar exercício</Text>
+            <View style={styles.footerActions}>
+              {isEditing ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.headerButton,
+                    styles.headerButtonEnabled,
+                    (pressed || hoveredControl === "delete-workout") && styles.headerButtonPressed,
+                  ]}
+                  onPress={handleDelete}
+                  {...hoverHandlers("delete-workout")}
+                >
+                  <Text style={[styles.headerButtonText, styles.saveTextActive]}>Excluir treino</Text>
+                </Pressable>
+              ) : <View />}
+            <Pressable
+              style={({ pressed }) => [
+                styles.headerButton,
+                canSave ? styles.headerButtonEnabled : styles.headerButtonDisabled,
+                canSave && (pressed || hoveredControl === "footer-save") && styles.headerButtonPressed,
+              ]}
+              onPress={handleSave}
+              disabled={!canSave || saving}
+              {...hoverHandlers("footer-save")}
+              hitSlop={8}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text
+                  style={[
+                    styles.headerButtonText,
+                    styles.saveText,
+                    canSave ? styles.saveTextActive : styles.saveTextDisabled,
+                  ]}
+                >
+                  Salvar
+                </Text>
+              )}
             </Pressable>
+            </View>
           </View>
         </KeyboardAvoidingView>
 
@@ -1675,8 +1675,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.accent,
   },
-  deleteButton: {
-    alignSelf: "center",
-    marginTop: 12,
+  headerSpacer: {
+    width: 44,
+  },
+  footerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
   },
 });
