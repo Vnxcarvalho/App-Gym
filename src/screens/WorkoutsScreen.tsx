@@ -201,6 +201,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 20,
+    paddingTop: 20,
     gap: 12,
   },
   columnWrapper: {

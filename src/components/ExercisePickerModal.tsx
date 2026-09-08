@@ -30,6 +30,7 @@ export type ExerciseCatalogItem = {
   name: string;
   muscleGroup: string;
   equipment: string;
+  demoMediaUrl?: string | null;
 };
 
 // Catálogo padrão (exercises.user_id = null no schema — visível a todos por padrão).

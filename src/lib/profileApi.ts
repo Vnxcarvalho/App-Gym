@@ -3,18 +3,16 @@ import { supabase } from "./supabase";
 export type Profile = {
   id: string;
   name: string;
-  heightCm: number | null;
   role: "user" | "admin";
   createdAt: string;
 };
 
-const SELECT_FIELDS = "id, name, height_cm, role, created_at";
+const SELECT_FIELDS = "id, name, role, created_at";
 
 function mapRow(data: any): Profile {
   return {
     id: data.id,
     name: data.name,
-    heightCm: data.height_cm,
     role: data.role,
     createdAt: data.created_at,
   };
@@ -35,12 +33,10 @@ export async function updateProfile(
   userId: string,
   patch: {
     name?: string;
-    heightCm?: number | null;
   }
 ): Promise<void> {
   const payload: Record<string, unknown> = {};
   if (patch.name !== undefined) payload.name = patch.name;
-  if (patch.heightCm !== undefined) payload.height_cm = patch.heightCm;
 
   const { error } = await supabase.from("profiles").update(payload).eq("id", userId);
   if (error) throw error;
@@ -56,6 +52,35 @@ export async function fetchAllProfiles(): Promise<Profile[]> {
 
   if (error) throw error;
   return (data ?? []).map(mapRow);
+}
+
+// Cadastra a conta do aluno com uma senha provisória definida pelo staff —
+// roda numa Edge Function porque criar usuário direto exige a service role
+// key, que nunca pode ficar no app cliente.
+export async function createStudent(
+  name: string,
+  email: string,
+  password: string
+): Promise<{ id: string }> {
+  const { data, error } = await supabase.functions.invoke("create-student", {
+    body: { name, email, password },
+  });
+
+  if (error) {
+    let message = error.message;
+    const context: Response | undefined = (error as any).context;
+    if (context) {
+      try {
+        const body = await context.clone().json();
+        if (body?.error) message = body.error;
+      } catch {
+        // resposta sem corpo JSON — mantém a mensagem padrão do erro
+      }
+    }
+    throw new Error(message);
+  }
+
+  return data;
 }
 
 // Apaga o perfil (só admin, via RLS) — cascade apaga os treinos e o histórico

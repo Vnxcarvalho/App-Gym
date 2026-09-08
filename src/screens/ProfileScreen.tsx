@@ -23,9 +23,11 @@ import PullIndicator from "../components/PullIndicator";
 
 function formatMemberSince(iso: string) {
   try {
-    return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(
-      new Date(iso)
-    );
+    return new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(new Date(iso));
   } catch {
     return "—";
   }
@@ -158,16 +160,6 @@ export default function ProfileScreen() {
     setProfile((prev) => (prev ? { ...prev, name } : prev));
   }
 
-  async function handleSaveHeight(text: string) {
-    if (!userId) return;
-    const parsed = text ? Number(text.replace(",", ".")) : null;
-    if (text && (Number.isNaN(parsed) || parsed! <= 0)) {
-      throw new Error("Altura inválida");
-    }
-    await updateProfile(userId, { heightCm: parsed });
-    setProfile((prev) => (prev ? { ...prev, heightCm: parsed } : prev));
-  }
-
   function handleSignOut() {
     Alert.alert("Sair da conta", "Deseja encerrar a sessão?", [
       { text: "Cancelar", style: "cancel" },
@@ -215,16 +207,6 @@ export default function ProfileScreen() {
         <Text style={styles.cardTitle}>Dados pessoais</Text>
 
         <EditableField label="Nome" value={profile.name} placeholder="Seu nome" onSave={handleSaveName} />
-
-        <View style={styles.divider} />
-
-        <EditableField
-          label="Altura (cm)"
-          value={profile.heightCm ? String(profile.heightCm) : ""}
-          placeholder="Ex: 178"
-          keyboardType="numeric"
-          onSave={handleSaveHeight}
-        />
 
         {email && (
           <>

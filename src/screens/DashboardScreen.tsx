@@ -1,5 +1,5 @@
 // screens/DashboardScreen.tsx
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../constants/theme";
@@ -9,6 +9,7 @@ import { useAdmin } from "../context/AdminContext";
 import { Alert } from "../lib/alert";
 import { useResponsive } from "../hooks/useResponsive";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
+import { fetchWeeklyCompletedDays } from "../lib/sessionsApi";
 import WorkoutFormModal, { WorkoutDraft } from "../components/WorkoutFormModal";
 import PullIndicator from "../components/PullIndicator";
 
@@ -31,15 +32,34 @@ type Props = {
 export default function DashboardScreen({ onStartWorkout, onProfilePress }: Props) {
   const { workouts, loading, refetch: refetchWorkouts, addWorkout, updateWorkout, deleteWorkout } =
     useWorkouts();
-  const { viewingUser, profile } = useAdmin();
+  const { viewingUser, profile, effectiveUserId } = useAdmin();
   const { contentMaxWidth } = useResponsive();
-  const { pullAnim, handlers: pullHandlers } = usePullToRefresh(refetchWorkouts);
   const [formVisible, setFormVisible] = useState(false);
   const [editingWorkout, setEditingWorkout] = useState<WorkoutDraft | null>(null);
+  const [completedDaysCount, setCompletedDaysCount] = useState(0);
   const todayIndex = new Date().getDay();
   const todayWorkout = findWorkoutForDay(workouts, todayIndex);
   const hasWorkouts = workouts.length > 0;
   const greetingName = viewingUser?.name ?? profile?.name ?? "";
+  const scheduledDaysCount = new Set(workouts.flatMap((w) => w.weekdays)).size;
+
+  const refetchWeeklyProgress = useCallback(async () => {
+    if (!effectiveUserId) return;
+    try {
+      const days = await fetchWeeklyCompletedDays(effectiveUserId);
+      setCompletedDaysCount(days.length);
+    } catch {
+      // silencioso: é só um indicador auxiliar, não bloqueia a tela
+    }
+  }, [effectiveUserId]);
+
+  useEffect(() => {
+    refetchWeeklyProgress();
+  }, [refetchWeeklyProgress]);
+
+  const { pullAnim, handlers: pullHandlers } = usePullToRefresh(async () => {
+    await Promise.all([refetchWorkouts(), refetchWeeklyProgress()]);
+  });
 
   function openCreate() {
     setEditingWorkout(null);
@@ -132,7 +152,26 @@ export default function DashboardScreen({ onStartWorkout, onProfilePress }: Prop
         </Pressable>
       </View>
 
-      <Text style={styles.sectionTitle}>Sua semana</Text>
+      <View style={styles.weekHeaderRow}>
+        <Text style={styles.sectionTitle}>Sua semana</Text>
+        {scheduledDaysCount > 0 && (
+          <Text style={styles.weekProgressText}>
+            {Math.min(completedDaysCount, scheduledDaysCount)}/{scheduledDaysCount} treinos
+          </Text>
+        )}
+      </View>
+      {scheduledDaysCount > 0 && (
+        <View style={styles.weekProgressTrack}>
+          <View
+            style={[
+              styles.weekProgressFill,
+              {
+                width: `${Math.min(100, (completedDaysCount / scheduledDaysCount) * 100)}%`,
+              },
+            ]}
+          />
+        </View>
+      )}
       <View style={styles.weekRow}>
         {WEEKDAY_SHORT.map((label, index) => {
           const isToday = index === todayIndex;
@@ -160,14 +199,13 @@ export default function DashboardScreen({ onStartWorkout, onProfilePress }: Prop
               <Text style={styles.todayLabel}>TREINO DE HOJE</Text>
               <Ionicons name="create-outline" size={13} color={COLORS.accent} />
             </View>
-            <Text style={styles.todayMuscle}>
+            <Text style={styles.todayMuscle}>{todayWorkout.name}</Text>
+            <Text style={styles.todaySub}>
+              {todayWorkout.exercises.length} exercício
+              {todayWorkout.exercises.length !== 1 ? "s" : ""} ·{" "}
               {getMuscleGroups(todayWorkout)
                 .map((mg) => MUSCLE_GROUP_LABELS[mg])
                 .join(" e ")}
-            </Text>
-            <Text style={styles.todaySub}>
-              {todayWorkout.exercises.length} exercício
-              {todayWorkout.exercises.length !== 1 ? "s" : ""} · {todayWorkout.name}
             </Text>
           </Pressable>
           <Pressable
@@ -236,8 +274,22 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     letterSpacing: 0.5,
     textTransform: "uppercase",
+  },
+  weekHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
+  weekProgressText: { fontSize: 12, fontWeight: "700", color: COLORS.accent },
+  weekProgressTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.border,
+    marginBottom: 16,
+    overflow: "hidden",
+  },
+  weekProgressFill: { height: "100%", borderRadius: 2, backgroundColor: COLORS.accent },
   weekRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 28 },
   dayPill: { flex: 1, alignItems: "center", gap: 8 },
   dayLabel: { fontSize: 11, fontWeight: "600", color: COLORS.textSecondary },

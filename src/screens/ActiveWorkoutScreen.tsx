@@ -19,9 +19,11 @@ import { useResponsive } from "../hooks/useResponsive";
 import { useWorkouts } from "../context/WorkoutsContext";
 import { useAdmin } from "../context/AdminContext";
 import type { WorkoutDraft, WorkoutExerciseDraft } from "../components/WorkoutFormModal";
+import ExerciseDemoModal from "../components/ExerciseDemoModal";
 import {
   addSessionSet,
   discardSession,
+  fetchLastFinishedSessionSets,
   fetchSessionSets,
   finishSession,
   getOrCreateOpenSession,
@@ -50,6 +52,7 @@ type SessionExercise = {
   exerciseId: string;
   name: string;
   muscleGroup: string;
+  demoMediaUrl?: string | null;
   targetSets: number;
   targetRepsLabel: string;
   sets: ExerciseSet[];
@@ -78,21 +81,29 @@ function targetRepsLabel(exercise: WorkoutExerciseDraft): string {
 // Reconstrói o estado da tela a partir do template do treino + séries já
 // registradas na sessão em aberto — é isso que faz o "feito" continuar verde
 // quando o usuário sai e volta pro treino.
-function buildSessionExercises(workout: WorkoutDraft, sessionSets: SessionSetRow[]): SessionExercise[] {
+function buildSessionExercises(
+  workout: WorkoutDraft,
+  sessionSets: SessionSetRow[],
+  lastSets: SessionSetRow[]
+): SessionExercise[] {
   return workout.exercises.map((exercise) => {
     const recordedForExercise = sessionSets.filter((s) => s.workoutExerciseId === exercise.id);
     const recordedByNumber = new Map(recordedForExercise.map((s) => [s.setNumber, s]));
+    const lastByNumber = new Map(
+      lastSets.filter((s) => s.workoutExerciseId === exercise.id).map((s) => [s.setNumber, s])
+    );
     const setCount = Math.max(exercise.sets.length, ...recordedForExercise.map((s) => s.setNumber), 0);
 
     const sets: ExerciseSet[] = Array.from({ length: setCount }, (_, i) => {
       const setNumber = i + 1;
       const target = exercise.sets[i];
       const recorded = recordedByNumber.get(setNumber);
+      const last = lastByNumber.get(setNumber);
       return {
         id: `${exercise.id}-set-${setNumber}`,
         setNumber,
-        weightKg: recorded ? String(recorded.weightKg) : "",
-        reps: recorded ? String(recorded.reps) : "",
+        weightKg: recorded ? String(recorded.weightKg) : last ? String(last.weightKg) : "",
+        reps: recorded ? String(recorded.reps) : last ? String(last.reps) : "",
         completed: !!recorded,
         sessionSetId: recorded?.id ?? null,
         targetReps: target?.reps,
@@ -105,6 +116,7 @@ function buildSessionExercises(workout: WorkoutDraft, sessionSets: SessionSetRow
       exerciseId: exercise.exerciseId,
       name: exercise.name,
       muscleGroup: exercise.muscleGroup,
+      demoMediaUrl: exercise.demoMediaUrl,
       targetSets: exercise.sets.length,
       targetRepsLabel: targetRepsLabel(exercise),
       sets,
@@ -130,6 +142,7 @@ export default function ActiveWorkoutScreen() {
   const [exercises, setExercises] = useState<SessionExercise[]>([]);
   const [loadingSession, setLoadingSession] = useState(true);
   const [elapsed, setElapsed] = useState(0);
+  const [demoExercise, setDemoExercise] = useState<SessionExercise | null>(null);
 
   // Abre (ou retoma) a sessão desse treino e carrega as séries já concluídas.
   useEffect(() => {
@@ -141,9 +154,15 @@ export default function ActiveWorkoutScreen() {
       try {
         const openSession = await getOrCreateOpenSession(effectiveUserId, workout.id!);
         const sessionSets = await fetchSessionSets(openSession.id);
+        let lastSets: SessionSetRow[] = [];
+        try {
+          lastSets = await fetchLastFinishedSessionSets(effectiveUserId, workout.id!);
+        } catch {
+          // não bloqueia o treino — sem histórico, os campos ficam vazios
+        }
         if (cancelled) return;
         setSession(openSession);
-        setExercises(buildSessionExercises(workout, sessionSets));
+        setExercises(buildSessionExercises(workout, sessionSets, lastSets));
       } catch (err: any) {
         if (!cancelled) {
           Alert.alert("Não foi possível carregar o treino", err.message ?? "Tente novamente.");
@@ -344,6 +363,14 @@ export default function ActiveWorkoutScreen() {
                   )}
                 </View>
               </View>
+              <Pressable
+                style={styles.demoButton}
+                onPress={() => setDemoExercise(exercise)}
+                hitSlop={8}
+                accessibilityLabel={`Ver demonstração de ${exercise.name}`}
+              >
+                <Ionicons name="play-circle-outline" size={26} color={COLORS.accent} />
+              </Pressable>
             </View>
 
             {/* Table header */}
@@ -401,6 +428,13 @@ export default function ActiveWorkoutScreen() {
         ))}
         </View>
       </ScrollView>
+
+      <ExerciseDemoModal
+        visible={!!demoExercise}
+        exerciseName={demoExercise?.name ?? ""}
+        demoMediaUrl={demoExercise?.demoMediaUrl}
+        onClose={() => setDemoExercise(null)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -485,7 +519,12 @@ const styles = StyleSheet.create({
   },
   exerciseHeader: {
     flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
     marginBottom: 6,
+  },
+  demoButton: {
+    padding: 2,
   },
   exerciseName: {
     fontSize: 16,

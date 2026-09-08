@@ -51,6 +51,28 @@ export async function getOrCreateOpenSession(
   return { id: created.id, startedAt: created.started_at };
 }
 
+// Séries da última sessão finalizada desse treino — usadas pra pré-preencher
+// carga/reps na sessão atual, já que o "alvo" do template não acompanha a
+// progressão real do usuário.
+export async function fetchLastFinishedSessionSets(
+  userId: string,
+  workoutId: string
+): Promise<SessionSetRow[]> {
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("workout_id", workoutId)
+    .not("finished_at", "is", null)
+    .order("finished_at", { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  const last = data?.[0];
+  if (!last) return [];
+  return fetchSessionSets(last.id);
+}
+
 export async function fetchSessionSets(sessionId: string): Promise<SessionSetRow[]> {
   const { data, error } = await supabase
     .from("session_sets")
@@ -107,4 +129,31 @@ export async function finishSession(sessionId: string): Promise<void> {
 export async function discardSession(sessionId: string): Promise<void> {
   const { error } = await supabase.from("workout_sessions").delete().eq("id", sessionId);
   if (error) throw error;
+}
+
+// Segunda-feira 00:00 (horário local) da semana que contém `d`.
+function weekStart(d: Date): Date {
+  const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dayFromMonday = (date.getDay() + 6) % 7; // 0 = segunda ... 6 = domingo
+  date.setDate(date.getDate() - dayFromMonday);
+  return date;
+}
+
+// Dias distintos (YYYY-MM-DD) com sessão finalizada na semana atual (seg-dom).
+export async function fetchWeeklyCompletedDays(userId: string): Promise<string[]> {
+  const start = weekStart(new Date());
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select("started_at")
+    .eq("user_id", userId)
+    .not("finished_at", "is", null)
+    .gte("started_at", start.toISOString())
+    .lt("started_at", end.toISOString());
+
+  if (error) throw error;
+
+  return [...new Set((data ?? []).map((row) => row.started_at.slice(0, 10)))];
 }

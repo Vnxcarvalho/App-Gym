@@ -10,7 +10,7 @@ import { DEFAULT_REST_SECONDS } from "../constants/workout";
 export async function fetchExerciseLibrary(): Promise<ExerciseCatalogItem[]> {
   const { data, error } = await supabase
     .from("exercises")
-    .select("id, name, muscle_group, equipment")
+    .select("id, name, muscle_group, equipment, demo_media_url")
     .order("name");
 
   if (error) throw error;
@@ -20,6 +20,7 @@ export async function fetchExerciseLibrary(): Promise<ExerciseCatalogItem[]> {
     name: row.name,
     muscleGroup: row.muscle_group,
     equipment: row.equipment,
+    demoMediaUrl: row.demo_media_url,
   }));
 }
 
@@ -34,8 +35,9 @@ export async function insertCustomExercise(
       name: item.name,
       muscle_group: item.muscleGroup,
       equipment: item.equipment,
+      demo_media_url: item.demoMediaUrl ?? null,
     })
-    .select("id, name, muscle_group, equipment")
+    .select("id, name, muscle_group, equipment, demo_media_url")
     .single();
 
   if (error) throw error;
@@ -45,6 +47,7 @@ export async function insertCustomExercise(
     name: data.name,
     muscleGroup: data.muscle_group,
     equipment: data.equipment,
+    demoMediaUrl: data.demo_media_url,
   };
 }
 
@@ -75,7 +78,7 @@ type WorkoutRow = {
         rest_seconds: number[] | null;
         order_index: number;
         done: boolean | null;
-        exercises: { id: string; name: string; muscle_group: string } | null;
+        exercises: { id: string; name: string; muscle_group: string; demo_media_url: string | null } | null;
       }[]
     | null;
 };
@@ -97,6 +100,7 @@ function mapWorkoutRow(row: WorkoutRow): WorkoutDraft {
         exerciseId: we.exercise_id,
         name: we.exercises?.name ?? "",
         muscleGroup: we.exercises?.muscle_group ?? "",
+        demoMediaUrl: we.exercises?.demo_media_url ?? null,
         collapsed: false,
         done: we.done ?? false,
         sets: reps.map((r, i) => ({
@@ -121,7 +125,7 @@ export async function fetchWorkouts(userId: string): Promise<WorkoutDraft[]> {
       workout_days ( weekday ),
       workout_exercises (
         id, exercise_id, target_reps, target_weight_kg, set_labels, rest_seconds, order_index, done,
-        exercises ( id, name, muscle_group )
+        exercises ( id, name, muscle_group, demo_media_url )
       )
     `
     )

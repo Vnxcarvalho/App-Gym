@@ -13,6 +13,7 @@ import PullIndicator from "../components/PullIndicator";
 import { Alert } from "../lib/alert";
 import { fetchAllProfiles, deleteProfile, Profile } from "../lib/profileApi";
 import { fetchWorkoutCountsByUser } from "../lib/workoutsApi";
+import CreateStudentModal from "../components/CreateStudentModal";
 
 function getInitial(name: string) {
   return name.trim().charAt(0).toUpperCase() || "?";
@@ -27,6 +28,7 @@ export default function AdminScreen() {
   const [workoutCounts, setWorkoutCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [createVisible, setCreateVisible] = useState(false);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -122,7 +124,15 @@ export default function AdminScreen() {
           <Pressable style={styles.closeButton} onPress={closeAdmin} hitSlop={8}>
             <Ionicons name="chevron-back" size={26} color={COLORS.textSecondary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Painel Admin</Text>
+          <Text style={[styles.headerTitle, { flex: 1 }]}>Painel Admin</Text>
+          <Pressable
+            style={styles.addStudentButton}
+            onPress={() => setCreateVisible(true)}
+            accessibilityLabel="Cadastrar aluno"
+          >
+            <Ionicons name="person-add-outline" size={16} color="#FFF" />
+            <Text style={styles.addStudentButtonText}>Aluno</Text>
+          </Pressable>
         </View>
 
         <Text style={styles.subtitle}>
@@ -199,6 +209,12 @@ export default function AdminScreen() {
           }}
         />
       </View>
+
+      <CreateStudentModal
+        visible={createVisible}
+        onClose={() => setCreateVisible(false)}
+        onCreated={handleRefresh}
+      />
     </SafeAreaView>
   );
 }
@@ -209,6 +225,16 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 4, paddingTop: 8, paddingBottom: 4 },
   closeButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 18, fontWeight: "700", color: COLORS.textPrimary },
+  addStudentButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.accent,
+  },
+  addStudentButtonText: { fontSize: 12, fontWeight: "700", color: "#FFF" },
   subtitle: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 16, lineHeight: 18 },
   searchBox: {
     flexDirection: "row",

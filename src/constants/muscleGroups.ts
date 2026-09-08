@@ -1,11 +1,11 @@
 export const MUSCLE_GROUP_LABELS: Record<string, string> = {
   chest: "Peito",
   back: "Costas",
-  shoulders: "Ombro",
+  shoulders: "Ombros",
   biceps: "Bíceps",
   triceps: "Tríceps",
   legs: "Quadríceps",
-  hamstrings: "Posterior de Coxa",
+  hamstrings: "Posterior",
   glutes: "Glúteos",
   calves: "Panturrilha",
   abs: "Abdômen",
