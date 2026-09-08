@@ -4,16 +4,18 @@ export type Profile = {
   id: string;
   name: string;
   role: "user" | "admin";
+  avatarUrl: string | null;
   createdAt: string;
 };
 
-const SELECT_FIELDS = "id, name, role, created_at";
+const SELECT_FIELDS = "id, name, role, avatar_url, created_at";
 
 function mapRow(data: any): Profile {
   return {
     id: data.id,
     name: data.name,
     role: data.role,
+    avatarUrl: data.avatar_url,
     createdAt: data.created_at,
   };
 }
@@ -33,13 +35,50 @@ export async function updateProfile(
   userId: string,
   patch: {
     name?: string;
+    avatarUrl?: string | null;
   }
 ): Promise<void> {
   const payload: Record<string, unknown> = {};
   if (patch.name !== undefined) payload.name = patch.name;
+  if (patch.avatarUrl !== undefined) payload.avatar_url = patch.avatarUrl;
 
   const { error } = await supabase.from("profiles").update(payload).eq("id", userId);
   if (error) throw error;
+}
+
+// Sobrescreve sempre o mesmo arquivo (<user_id>/avatar.<ext>) — assim não
+// acumula lixo no bucket a cada troca de foto. O "?v=" no final da URL salva
+// no perfil é só cache-busting: sem ele, Image (RN/web) reusaria o cache
+// antigo mesmo depois do arquivo ser substituído.
+export async function uploadAvatar(
+  userId: string,
+  uri: string,
+  contentType: string
+): Promise<string> {
+  const ext = contentType.split("/")[1] || "jpg";
+  const path = `${userId}/avatar.${ext}`;
+
+  const response = await fetch(uri);
+  const blob = await response.blob();
+
+  const { error: uploadError } = await supabase.storage
+    .from("avatars")
+    .upload(path, blob, { contentType, upsert: true });
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  const publicUrl = `${data.publicUrl}?v=${Date.now()}`;
+
+  await updateProfile(userId, { avatarUrl: publicUrl });
+  return publicUrl;
+}
+
+export async function removeAvatar(userId: string, currentAvatarUrl: string): Promise<void> {
+  const path = currentAvatarUrl.split("/avatars/")[1]?.split("?")[0];
+  if (path) {
+    await supabase.storage.from("avatars").remove([path]);
+  }
+  await updateProfile(userId, { avatarUrl: null });
 }
 
 // Só retorna resultado não-vazio pra quem tem role = 'admin' (RLS) — usado

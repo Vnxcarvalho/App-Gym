@@ -4,6 +4,7 @@ import {
   View,
   Text,
   TextInput,
+  Image,
   Pressable,
   StyleSheet,
   ScrollView,
@@ -20,6 +21,7 @@ import { useAdmin } from "../context/AdminContext";
 import { useResponsive } from "../hooks/useResponsive";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import PullIndicator from "../components/PullIndicator";
+import AvatarPickerSheet from "../components/AvatarPickerSheet";
 
 function formatMemberSince(iso: string) {
   try {
@@ -31,10 +33,6 @@ function formatMemberSince(iso: string) {
   } catch {
     return "—";
   }
-}
-
-function getInitial(name: string) {
-  return name.trim().charAt(0).toUpperCase() || "?";
 }
 
 // ---------------------------------------------------------
@@ -123,6 +121,7 @@ export default function ProfileScreen() {
   const { contentMaxWidth } = useResponsive();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [avatarPickerVisible, setAvatarPickerVisible] = useState(false);
 
   // Enquanto o admin está "visualizando como" outro usuário, essa tela lê e
   // salva os dados DELE (nome, altura) — só e-mail e sair da conta continuam
@@ -183,9 +182,16 @@ export default function ProfileScreen() {
       <Text style={styles.screenTitle}>Perfil</Text>
 
       <View style={styles.avatarBlock}>
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatarInitial}>{getInitial(profile.name)}</Text>
-        </View>
+        <Pressable style={styles.avatarCircle} onPress={() => setAvatarPickerVisible(true)}>
+          {profile.avatarUrl ? (
+            <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <Ionicons name="person" size={36} color={COLORS.textTertiary} />
+          )}
+          <View style={styles.avatarEditOverlay}>
+            <Ionicons name="camera" size={14} color="#FFF" />
+          </View>
+        </Pressable>
         <Text style={styles.name}>{profile.name}</Text>
         <Text style={styles.email}>{email ?? "Editando via Painel Admin"}</Text>
       </View>
@@ -233,6 +239,16 @@ export default function ProfileScreen() {
       </Pressable>
       </View>
       </ScrollView>
+
+      {userId && (
+        <AvatarPickerSheet
+          visible={avatarPickerVisible}
+          userId={userId}
+          currentAvatarUrl={profile.avatarUrl}
+          onClose={() => setAvatarPickerVisible(false)}
+          onChanged={(avatarUrl) => setProfile((prev) => (prev ? { ...prev, avatarUrl } : prev))}
+        />
+      )}
     </View>
   );
 }
@@ -256,15 +272,28 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: COLORS.accentMuted,
+    backgroundColor: COLORS.surfaceAlt,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
     marginBottom: 12,
   },
-  avatarInitial: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: COLORS.accent,
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    position: "absolute",
+  },
+  avatarEditOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 22,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   name: {
     fontSize: 18,

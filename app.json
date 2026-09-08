@@ -33,6 +33,13 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permita acesso às fotos pra escolher sua foto de perfil.",
+          "cameraPermission": "Permita acesso à câmera pra tirar sua foto de perfil."
+        }
       ]
     ],
     "experiments": {
