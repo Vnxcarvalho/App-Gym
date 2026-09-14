@@ -13,7 +13,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { COLORS } from "../constants/theme";
+import { COLORS, FONT_MONO } from "../constants/theme";
+import { MUSCLE_GROUP_LABELS } from "../constants/muscleGroups";
 import { Alert } from "../lib/alert";
 import { useResponsive } from "../hooks/useResponsive";
 import { useWorkouts } from "../context/WorkoutsContext";
@@ -356,7 +357,9 @@ export default function ActiveWorkoutScreen() {
                 <Text style={styles.exerciseName}>{exercise.name}</Text>
                 <View style={styles.exerciseMetaRow}>
                   <View style={styles.muscleBadge}>
-                    <Text style={styles.muscleBadgeText}>{exercise.muscleGroup}</Text>
+                    <Text style={styles.muscleBadgeText}>
+                      {MUSCLE_GROUP_LABELS[exercise.muscleGroup] ?? exercise.muscleGroup}
+                    </Text>
                   </View>
                   {exercise.targetRepsLabel && (
                     <Text style={styles.targetText}>
@@ -365,15 +368,22 @@ export default function ActiveWorkoutScreen() {
                   )}
                 </View>
               </View>
-              <Pressable
-                style={styles.demoButton}
-                onPress={() => setDemoExercise(exercise)}
-                hitSlop={8}
-                accessibilityLabel={`Ver demonstração de ${exercise.name}`}
-              >
-                <Ionicons name="play-circle-outline" size={26} color={COLORS.accent} />
-              </Pressable>
             </View>
+
+            <Pressable
+              style={({ pressed }) => [styles.demoRow, pressed && styles.demoRowPressed]}
+              onPress={() => setDemoExercise(exercise)}
+              accessibilityLabel={`Ver como fazer ${exercise.name}`}
+            >
+              <View style={styles.demoThumb}>
+                <Ionicons name="play" size={16} color={COLORS.textPrimary} />
+              </View>
+              <View style={styles.demoTextWrap}>
+                <Text style={styles.demoTitle}>Como fazer</Text>
+                <Text style={styles.demoSubtitle}>Vídeo de execução do exercício</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+            </Pressable>
 
             {/* Table header */}
             <View style={styles.setsHeaderRow}>
@@ -470,6 +480,7 @@ const styles = StyleSheet.create({
   },
   headerTimer: {
     fontSize: 12,
+    fontFamily: FONT_MONO,
     color: COLORS.textSecondary,
     marginTop: 2,
   },
@@ -486,7 +497,7 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 4,
-    backgroundColor: COLORS.surfaceAlt,
+    backgroundColor: COLORS.hairline,
     marginHorizontal: 20,
     borderRadius: 2,
     overflow: "hidden",
@@ -527,8 +538,38 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 6,
   },
-  demoButton: {
-    padding: 2,
+  demoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 10,
+    marginBottom: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  demoRowPressed: {
+    backgroundColor: COLORS.border,
+  },
+  demoThumb: {
+    width: 44,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  demoTextWrap: {
+    flex: 1,
+  },
+  demoTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  demoSubtitle: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
   exerciseName: {
     fontSize: 16,
@@ -565,9 +606,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   setsHeaderCell: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
-    color: COLORS.textTertiary,
+    color: COLORS.textSecondary,
     letterSpacing: 0.4,
   },
   setRow: {
@@ -583,6 +624,7 @@ const styles = StyleSheet.create({
   setNumber: {
     width: 40,
     fontSize: 13,
+    fontFamily: FONT_MONO,
     fontWeight: "600",
     color: COLORS.textSecondary,
   },
@@ -596,14 +638,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     fontSize: 16, // >=16px evita o zoom automático do Safari/Chrome no celular ao focar
+    fontFamily: FONT_MONO,
     textAlign: "center",
   },
   checkCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: COLORS.hairline,
     alignItems: "center",
     justifyContent: "center",
   },

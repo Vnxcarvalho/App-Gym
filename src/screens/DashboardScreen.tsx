@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
   dayPill: { flex: 1, alignItems: "center", gap: 8 },
   dayLabel: { fontSize: 11, fontWeight: "600", color: COLORS.textSecondary },
   dayDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.border },
-  dayDotTrained: { backgroundColor: "#3A3A3A" },
+  dayDotTrained: { backgroundColor: "rgba(232, 16, 42, 0.35)" },
   dayDotToday: { backgroundColor: COLORS.accent, width: 10, height: 10, borderRadius: 5 },
   dayDotRest: { backgroundColor: "transparent", borderWidth: 1, borderColor: COLORS.border },
   todayCard: {

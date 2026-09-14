@@ -20,11 +20,12 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { COLORS } from "../constants/theme";
+import { COLORS, FONT_MONO } from "../constants/theme";
 import { Alert } from "../lib/alert";
 import { MUSCLE_GROUP_LABELS, WEEKDAY_FULL_LABELS, WEEKDAY_LABELS } from "../constants/muscleGroups";
 import { useResponsive } from "../hooks/useResponsive";
 import ExercisePickerModal, { ExerciseCatalogItem } from "./ExercisePickerModal";
+import ExerciseDemoModal from "./ExerciseDemoModal";
 import { DEFAULT_REST_SECONDS } from "../constants/workout";
 
 export type SetTarget = {
@@ -105,6 +106,9 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
   const [restDraft, setRestDraft] = useState("");
   const [hoveredControl, setHoveredControl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [demoExercise, setDemoExercise] = useState<{ name: string; demoMediaUrl?: string | null } | null>(
+    null
+  );
 
   // Cronômetro de descanso: dispara sozinho ao marcar uma série como feita
   // (o mesmo checkbox que já serve de "diário" do treino), usando o tempo
@@ -722,6 +726,23 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
 
                 {!item.collapsed && (
                   <View style={styles.setsBlock}>
+                    <Pressable
+                      style={({ pressed }) => [styles.demoRow, pressed && styles.demoRowPressed]}
+                      onPress={() =>
+                        setDemoExercise({ name: item.name, demoMediaUrl: item.demoMediaUrl })
+                      }
+                      accessibilityLabel={`Ver como fazer ${item.name}`}
+                    >
+                      <View style={styles.demoThumb}>
+                        <Ionicons name="play" size={16} color={COLORS.accent} />
+                      </View>
+                      <View style={styles.demoTextWrap}>
+                        <Text style={styles.demoTitle}>Como fazer</Text>
+                        <Text style={styles.demoSubtitle}>Vídeo de execução do exercício</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+                    </Pressable>
+
                     {item.sets.map((set, setIndex) => {
                       const defaultLabel = `Série ${setIndex + 1}`;
                       const isEditingLabel = editingLabelSetId === set.id;
@@ -798,6 +819,8 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                         </View>
 
                         <View style={styles.setBottomRow}>
+                          <View style={styles.setField}>
+                          <Text style={styles.setFieldLabel}>Repetições</Text>
                           <View style={styles.stepper}>
                             <Pressable
                               style={styles.stepperButton}
@@ -825,8 +848,10 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                               />
                             </Pressable>
                           </View>
-                          <Text style={styles.targetsX}>reps</Text>
+                          </View>
 
+                          <View style={styles.setField}>
+                          <Text style={styles.setFieldLabel}>Carga · kg</Text>
                           <View style={styles.stepper}>
                             <Pressable
                               style={styles.stepperButton}
@@ -854,6 +879,7 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                               />
                             ) : (
                               <Pressable
+                                style={styles.weightValueButton}
                                 onPress={() => !set.done && startEditingWeight(set.id, set.weightKg)}
                                 disabled={set.done}
                                 hitSlop={4}
@@ -874,11 +900,12 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                               />
                             </Pressable>
                           </View>
-                          <Text style={styles.targetsX}>kg</Text>
+                          </View>
                         </View>
 
                         <View style={styles.setMetaRow}>
                           <View style={styles.restTimeChip}>
+                            <Text style={styles.restLabel}>Descanso</Text>
                             <Ionicons
                               name="timer-outline"
                               size={13}
@@ -919,6 +946,8 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                                 item.sets.length <= 1 && styles.removeSetButtonDisabled,
                               ]}
                               onPress={() => removeSetRow(item.id, set.id)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Excluir ${defaultLabel}`}
                               disabled={item.sets.length <= 1}
                               {...hoverHandlers(`remove-${set.id}`)}
                               hitSlop={6}
@@ -943,10 +972,14 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                                   styles.setDoneButtonActive,
                               ]}
                               onPress={() => toggleSetDone(item.id, set.id)}
+                              accessibilityRole="checkbox"
+                              accessibilityState={{ checked: set.done }}
+                              accessibilityLabel={`Marcar ${defaultLabel} como ${set.done ? "pendente" : "concluída"}`}
                               {...hoverHandlers(`done-${set.id}`)}
                               hitSlop={6}
                             >
                               {({ pressed }: { pressed: boolean }) => (
+                                <>
                                 <Ionicons
                                   name="checkmark"
                                   size={14}
@@ -956,6 +989,10 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                                       : COLORS.textTertiary
                                   }
                                 />
+                                <Text style={[styles.setDoneText, (set.done || pressed || hoveredControl === `done-${set.id}`) && styles.setDoneTextActive]}>
+                                  {set.done ? "Feita" : "Concluir"}
+                                </Text>
+                                </>
                               )}
                             </Pressable>
                           </View>
@@ -1124,6 +1161,13 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
         alreadyAddedIds={draft.exercises.map((e) => e.exerciseId)}
         onClose={() => setPickerVisible(false)}
         onAdd={handleAddExercise}
+      />
+
+      <ExerciseDemoModal
+        visible={!!demoExercise}
+        exerciseName={demoExercise?.name ?? ""}
+        demoMediaUrl={demoExercise?.demoMediaUrl}
+        onClose={() => setDemoExercise(null)}
       />
     </Modal>
   );
@@ -1311,15 +1355,49 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
     gap: 8,
   },
+  demoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  demoRowPressed: {
+    backgroundColor: COLORS.border,
+  },
+  demoThumb: {
+    width: 44,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  demoTextWrap: {
+    flex: 1,
+  },
+  demoTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  demoSubtitle: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
   setLine: {
-    gap: 8,
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-    marginHorizontal: -6,
+    gap: 12,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   setLineDone: {
     backgroundColor: "rgba(46, 204, 113, 0.06)",
+    borderColor: "rgba(46, 204, 113, 0.3)",
   },
   setTopRow: {
     flexDirection: "row",
@@ -1330,14 +1408,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: 6,
+    gap: 12,
     rowGap: 8,
   },
   setMetaRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 8,
+    flexWrap: "wrap",
+    gap: 8,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
   setActions: {
     flexDirection: "row",
@@ -1352,8 +1434,9 @@ const styles = StyleSheet.create({
   },
   setLineLabel: {
     flexShrink: 1,
-    fontSize: 12,
-    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
   },
   editLabelButton: {
     width: 22,
@@ -1366,9 +1449,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentMuted,
   },
   setLabelInput: {
-    width: 90,
-    flexGrow: 0,
-    fontSize: 12,
+    flex: 1,
+    minWidth: 0,
+    fontSize: 16,
     color: COLORS.textPrimary,
     paddingVertical: 2,
     borderBottomWidth: 1,
@@ -1388,8 +1471,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.success,
   },
   removeSetButton: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 40,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
@@ -1402,9 +1485,11 @@ const styles = StyleSheet.create({
     opacity: 0.25,
   },
   setDoneButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    paddingHorizontal: 12,
+    height: 40,
+    borderRadius: 10,
+    flexDirection: "row",
+    gap: 5,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.surfaceAlt,
@@ -1412,13 +1497,22 @@ const styles = StyleSheet.create({
   setDoneButtonActive: {
     backgroundColor: COLORS.success,
   },
+  setDoneText: { fontSize: 12, fontWeight: "700", color: COLORS.textSecondary },
+  setDoneTextActive: { color: COLORS.background },
+  setField: { flex: 1, minWidth: 110, gap: 6 },
+  setFieldLabel: { fontSize: 11, fontWeight: "600", color: COLORS.textSecondary },
+  weightValueButton: { flex: 1, minHeight: 44, justifyContent: "center" },
+  restLabel: { fontSize: 11, color: COLORS.textSecondary },
   addSetRowButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    alignSelf: "flex-start",
+    justifyContent: "center",
     marginTop: 4,
-    paddingVertical: 4,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
   },
   addSetRowText: {
     fontSize: 12,
@@ -1449,29 +1543,34 @@ const styles = StyleSheet.create({
   stepper: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: COLORS.surfaceAlt,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   stepperButton: {
-    width: 28,
-    height: 32,
+    width: 32,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
   },
   stepperValue: {
     minWidth: 18,
     textAlign: "center",
-    fontSize: 13,
+    fontSize: 18,
+    fontFamily: FONT_MONO,
+    fontVariant: ["tabular-nums"],
     fontWeight: "700",
     color: COLORS.textPrimary,
   },
   stepperInput: {
-    width: 34,
-    height: 20,
+    flex: 1,
+    minWidth: 0,
+    height: 44,
     textAlign: "center",
     fontSize: 16, // >=16px evita o zoom automático do Safari/Chrome no celular ao focar
+    fontFamily: FONT_MONO,
     fontWeight: "700",
     color: COLORS.textPrimary,
     padding: 0,
@@ -1480,15 +1579,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.accent,
   },
-  targetsX: {
-    fontSize: 11,
-    color: COLORS.textTertiary,
-  },
   restTimeChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    height: 32,
+    minHeight: 40,
     paddingHorizontal: 8,
     borderRadius: 10,
     backgroundColor: COLORS.surfaceAlt,
@@ -1497,6 +1592,7 @@ const styles = StyleSheet.create({
   },
   restTimeText: {
     fontSize: 12,
+    fontFamily: FONT_MONO,
     fontWeight: "700",
     color: COLORS.textPrimary,
   },
@@ -1508,6 +1604,7 @@ const styles = StyleSheet.create({
     height: 20,
     textAlign: "center",
     fontSize: 16, // >=16px evita o zoom automático do Safari/Chrome no celular ao focar
+    fontFamily: FONT_MONO,
     fontWeight: "700",
     color: COLORS.textPrimary,
     padding: 0,
@@ -1556,7 +1653,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentMuted,
   },
   restBarLabel: { fontSize: 13, fontWeight: "700", color: COLORS.textPrimary },
-  restBarTime: { fontSize: 20, fontWeight: "700", color: COLORS.accent, fontVariant: ["tabular-nums"] },
+  restBarTime: {
+    fontSize: 20,
+    fontFamily: FONT_MONO,
+    fontWeight: "700",
+    color: COLORS.accent,
+    fontVariant: ["tabular-nums"],
+  },
   restProgressTrack: {
     height: 4,
     borderRadius: 2,
