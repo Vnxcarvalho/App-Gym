@@ -317,7 +317,9 @@ export default function ActiveWorkoutScreen() {
         </Pressable>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{workout.name}</Text>
+          <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+            {workout.name}
+          </Text>
           <Text style={styles.headerTimer}>{formatElapsed(elapsed)}</Text>
         </View>
 
@@ -457,7 +459,9 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   headerCenter: {
+    flex: 1,
     alignItems: "center",
+    paddingHorizontal: 8,
   },
   headerTitle: {
     fontSize: 15,

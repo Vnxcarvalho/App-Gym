@@ -875,7 +875,9 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                             </Pressable>
                           </View>
                           <Text style={styles.targetsX}>kg</Text>
+                        </View>
 
+                        <View style={styles.setMetaRow}>
                           <View style={styles.restTimeChip}>
                             <Ionicons
                               name="timer-outline"
@@ -933,7 +935,7 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                                 />
                               )}
                             </Pressable>
-  
+
                             <Pressable
                               style={({ pressed }) => [
                                 styles.setDoneButton,
@@ -1327,13 +1329,20 @@ const styles = StyleSheet.create({
   setBottomRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: 6,
+    rowGap: 8,
+  },
+  setMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 8,
   },
   setActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginLeft: 12,
   },
   setLabelRow: {
     flex: 1,
