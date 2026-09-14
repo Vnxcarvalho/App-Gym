@@ -10,6 +10,7 @@ import * as ImagePicker from "expo-image-picker";
 import { COLORS } from "../constants/theme";
 import { Alert } from "../lib/alert";
 import { uploadAvatar, removeAvatar } from "../lib/profileApi";
+import AvatarEditModal from "./AvatarEditModal";
 
 type Props = {
   visible: boolean;
@@ -27,20 +28,11 @@ export default function AvatarPickerSheet({
   onChanged,
 }: Props) {
   const [busy, setBusy] = useState(false);
+  const [editingUri, setEditingUri] = useState<string | null>(null);
 
-  async function handlePickedAsset(result: ImagePicker.ImagePickerResult) {
+  function handlePickedAsset(result: ImagePicker.ImagePickerResult) {
     if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
-    setBusy(true);
-    try {
-      const url = await uploadAvatar(userId, asset.uri, asset.mimeType ?? "image/jpeg");
-      onChanged(url);
-      onClose();
-    } catch (err: any) {
-      Alert.alert("Não foi possível enviar a foto", err.message ?? "Tente novamente.");
-    } finally {
-      setBusy(false);
-    }
+    setEditingUri(result.assets[0].uri);
   }
 
   async function handleCamera() {
@@ -49,13 +41,8 @@ export default function AvatarPickerSheet({
       Alert.alert("Permissão necessária", "Autorize o acesso à câmera pra tirar a foto.");
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-      allowsEditing: true,
-      aspect: [1, 1],
-    });
-    await handlePickedAsset(result);
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 1 });
+    handlePickedAsset(result);
   }
 
   async function handleLibrary() {
@@ -66,11 +53,23 @@ export default function AvatarPickerSheet({
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      quality: 0.8,
-      allowsEditing: true,
-      aspect: [1, 1],
+      quality: 1,
     });
-    await handlePickedAsset(result);
+    handlePickedAsset(result);
+  }
+
+  async function handleEditConfirm({ uri, mimeType }: { uri: string; mimeType: string }) {
+    setEditingUri(null);
+    setBusy(true);
+    try {
+      const url = await uploadAvatar(userId, uri, mimeType);
+      onChanged(url);
+      onClose();
+    } catch (err: any) {
+      Alert.alert("Não foi possível enviar a foto", err.message ?? "Tente novamente.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleRemove() {
@@ -132,6 +131,13 @@ export default function AvatarPickerSheet({
           </Pressable>
         </View>
       </SafeAreaView>
+
+      <AvatarEditModal
+        visible={!!editingUri}
+        uri={editingUri}
+        onCancel={() => setEditingUri(null)}
+        onConfirm={handleEditConfirm}
+      />
     </Modal>
   );
 }
