@@ -45,3 +45,9 @@ example
 
 .vercel
 .env*
+
+# Supabase CLI
+supabase/.temp/
+
+# IDE
+.idea/
