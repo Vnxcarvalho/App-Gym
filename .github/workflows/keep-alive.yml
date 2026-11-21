@@ -1,0 +1,21 @@
+name: Supabase keep-alive
+
+# Evita que o projeto Supabase (plano free) seja pausado por inatividade (7 dias).
+on:
+  schedule:
+    - cron: "0 12 */2 * *" # a cada 2 dias, 12:00 UTC
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          curl -sf --retry 3 --retry-delay 10 \
+            "$SUPABASE_URL/rest/v1/exercises?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY"
