@@ -23,6 +23,9 @@ function RootNavigator() {
     <Stack
       screenOptions={{
         headerShown: false,
+        // Transição padrão entre telas (login <-> app); modais sobrescrevem abaixo.
+        animation: "fade",
+        animationDuration: 170,
         contentStyle: { backgroundColor: COLORS.background },
       }}
     >

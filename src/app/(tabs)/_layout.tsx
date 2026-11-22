@@ -45,6 +45,13 @@ function TabsNavigator() {
       <Tabs
         screenOptions={{
           headerShown: false,
+          // Transição suave entre abas (cross-fade rápido).
+          animation: "fade",
+          transitionSpec: {
+            animation: "timing",
+            config: { duration: 140 },
+          },
+          sceneStyle: { backgroundColor: COLORS.background },
           tabBarActiveTintColor: COLORS.accent,
           tabBarInactiveTintColor: COLORS.textTertiary,
           tabBarStyle: {
