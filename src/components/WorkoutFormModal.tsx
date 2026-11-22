@@ -3,6 +3,10 @@
 // Modal full-screen de criar/editar treino. Um único FlatList vertical (exercícios)
 // carrega o form inteiro via ListHeaderComponent/ListFooterComponent — evita aninhar
 // uma FlatList dentro de um ScrollView (warning do RN e scroll quebrado em Android).
+//
+// Layout: cabeçalho com fechar/título/Salvar, nome do treino em destaque, e cada
+// exercício como bloco "chapado" (sem card) com tabela de séries em pílulas —
+// Carga, Reps e Descanso editáveis direto no campo.
 import React, { useEffect, useRef, useState } from "react";
 import {
   Modal,
@@ -17,6 +21,7 @@ import {
   ActivityIndicator,
   Animated,
   Vibration,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -44,7 +49,7 @@ export type WorkoutExerciseDraft = {
   muscleGroup: string;
   demoMediaUrl?: string | null;
   sets: SetTarget[]; // uma entrada por série, cada uma com sua própria meta de reps
-  collapsed: boolean; // recolhe o card pra "Feito", economiza espaço numa lista longa
+  collapsed: boolean; // recolhe o bloco, economiza espaço numa lista longa
   done: boolean; // marcado via "Feito" — fica verde e permanece assim mesmo recolhido
 };
 
@@ -87,33 +92,209 @@ function formatRest(totalSeconds: number) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-// Só um exercício começa aberto: o primeiro ainda não feito — assim reabrir o
-// treino retoma de onde parou. Se já estiver tudo concluído, fica tudo recolhido.
+// Só um exercício começa aberto: sempre o primeiro da lista (o do topo).
 function collapseAllButFirst(exercises: WorkoutExerciseDraft[]): WorkoutExerciseDraft[] {
-  const firstPending = exercises.findIndex((e) => !e.done);
-  if (firstPending === -1) return exercises.map((e) => ({ ...e, collapsed: true }));
-  return exercises.map((e, i) => ({ ...e, collapsed: i !== firstPending }));
+  return exercises.map((e, i) => ({ ...e, collapsed: i !== 0 }));
+}
+
+// Aceita vários jeitos de digitar, porque cada aluno pensa num formato
+// diferente: "90" ou "60s" = segundos; "1m"/"1min" = minutos; "1:30" =
+// mm:ss; e "1,5" (vírgula OU ponto, sem sufixo) = minutos decimais — é a
+// vírgula que converte pra quem prefere pensar em minutos (1,5 = 1min30s)
+// sem atrapalhar quem digita direto em segundos (60 continua sendo 60s).
+function parseRestInput(text: string): number | null {
+  const raw = text.trim();
+  if (!raw) return null;
+
+  if (raw.includes(":")) {
+    const [mStr, sStr] = raw.split(":");
+    const m = Number(mStr);
+    const s = Number(sStr);
+    if (Number.isNaN(m) || Number.isNaN(s)) return null;
+    return Math.round(m * 60 + s);
+  }
+
+  const lower = raw.toLowerCase().replace(",", ".");
+
+  if (lower.endsWith("min")) {
+    const n = Number(lower.slice(0, -3));
+    return Number.isNaN(n) ? null : Math.round(n * 60);
+  }
+  if (lower.endsWith("m")) {
+    const n = Number(lower.slice(0, -1));
+    return Number.isNaN(n) ? null : Math.round(n * 60);
+  }
+  if (lower.endsWith("seg")) {
+    const n = Number(lower.slice(0, -3));
+    return Number.isNaN(n) ? null : Math.round(n);
+  }
+  if (lower.endsWith("s")) {
+    const n = Number(lower.slice(0, -1));
+    return Number.isNaN(n) ? null : Math.round(n);
+  }
+
+  const n = Number(lower);
+  if (Number.isNaN(n)) return null;
+  const isMinutesDecimal = raw.includes(",") || raw.includes(".");
+  return Math.round(isMinutesDecimal ? n * 60 : n);
+}
+
+function parseDecimal(text: string): number | null {
+  const n = Number(text.trim().replace(",", "."));
+  return text.trim() === "" || Number.isNaN(n) ? null : n;
+}
+
+function parseInteger(text: string): number | null {
+  const n = Math.round(Number(text.trim().replace(",", ".")));
+  return text.trim() === "" || Number.isNaN(n) ? null : n;
+}
+
+// Pílula numérica editável direto no campo. Mantém o texto local enquanto o
+// usuário digita (pra aceitar "1:30", "22,5" etc.) e só confirma no blur.
+function NumberPill({
+  value,
+  parse,
+  onCommit,
+  suffix,
+  disabled,
+  accessibilityLabel,
+  height,
+  fontSize,
+  flex = 1,
+}: {
+  value: number;
+  parse: (text: string) => number | null;
+  onCommit: (parsed: number) => void;
+  suffix?: string;
+  disabled?: boolean;
+  accessibilityLabel: string;
+  height: number;
+  fontSize: number;
+  flex?: number;
+}) {
+  const [text, setText] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setText(String(value));
+  }, [value, focused]);
+
+  function commit() {
+    setFocused(false);
+    const parsed = parse(text);
+    if (parsed === null) {
+      setText(String(value));
+      return;
+    }
+    onCommit(parsed);
+  }
+
+  return (
+    <View
+      style={[
+        pillStyles.pill,
+        { flex, height, borderRadius: height / 2 },
+        disabled && pillStyles.pillDisabled,
+      ]}
+    >
+      <TextInput
+        style={[pillStyles.input, { fontSize }, disabled && pillStyles.inputDisabled]}
+        maxFontSizeMultiplier={1.2}
+        value={text}
+        onChangeText={setText}
+        onFocus={() => setFocused(true)}
+        onBlur={commit}
+        onSubmitEditing={commit}
+        keyboardType="decimal-pad"
+        returnKeyType="done"
+        selectTextOnFocus
+        editable={!disabled}
+        accessibilityLabel={accessibilityLabel}
+      />
+      {suffix ? <Text style={pillStyles.suffix}>{suffix}</Text> : null}
+    </View>
+  );
+}
+
+// Miniatura circular do exercício (usa a mídia de demonstração, se houver).
+function ExerciseAvatar({
+  uri,
+  size,
+  onPress,
+}: {
+  uri?: string | null;
+  size: number;
+  onPress: () => void;
+}) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <Pressable
+      style={[avatarStyles.ring, { width: size, height: size, borderRadius: size / 2 }]}
+      onPress={onPress}
+      accessibilityLabel="Ver como fazer"
+    >
+      {uri && !failed ? (
+        <Image
+          source={{ uri }}
+          style={avatarStyles.image}
+          resizeMode="cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <Ionicons name="barbell-outline" size={22} color={COLORS.textSecondary} />
+      )}
+    </Pressable>
+  );
 }
 
 export default function WorkoutFormModal({ visible, initialWorkout, onClose, onSave, onDelete }: Props) {
-  const { isWide, contentMaxWidth } = useResponsive();
+  const { contentMaxWidth, width } = useResponsive();
+  // Formulário de leitura/edição: em tablet/desktop não precisa esticar além disso.
+  const formWidth = Math.min(contentMaxWidth, 640);
+  // Celulares estreitos (iPhone SE/mini, Android compacto): encolhe pílulas,
+  // círculos e espaçamentos pra tabela de 3 colunas não apertar nem quebrar.
+  const compact = width < 380;
+  const m = {
+    pillHeight: compact ? 42 : 48,
+    pillFont: compact ? 15 : 17,
+    indexSize: compact ? 38 : 44,
+    menuWidth: compact ? 22 : 28,
+    rowGap: compact ? 6 : 8,
+    avatar: compact ? 44 : 52,
+    nameFont: compact ? 16 : 18,
+    sidePadding: compact ? 12 : 16,
+  };
   const [draft, setDraft] = useState<WorkoutDraft>(EMPTY_DRAFT);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [editingLabelSetId, setEditingLabelSetId] = useState<string | null>(null);
-  const [editingWeightSetId, setEditingWeightSetId] = useState<string | null>(null);
-  const [weightDraft, setWeightDraft] = useState("");
-  const [editingRestSetId, setEditingRestSetId] = useState<string | null>(null);
-  const [restDraft, setRestDraft] = useState("");
-  const [hoveredControl, setHoveredControl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Muda a cada abertura: remonta a lista e garante que ela comece no topo,
+  // em vez de herdar a posição de rolagem da última vez que o modal foi usado.
+  const [openCount, setOpenCount] = useState(0);
+  const listRef = useRef<FlatList<WorkoutExerciseDraft>>(null);
+
+  function scrollListToTop() {
+    // Espera o layout assentar (novo exercício / fechamento do seletor) antes de rolar.
+    // Repete após a animação do modal: na web o foco volta pro botão que abriu o
+    // seletor e o navegador rola até ele, desfazendo um único scroll imediato.
+    [50, 350, 700].forEach((delay) =>
+      setTimeout(() => listRef.current?.scrollToOffset({ offset: 0, animated: false }), delay)
+    );
+  }
+
+  function openPicker() {
+    // Web: tira o foco do botão pra o navegador não rolar até ele ao fechar o seletor.
+    if (Platform.OS === "web") (globalThis as any).document?.activeElement?.blur?.();
+    setPickerVisible(true);
+  }
   const [demoExercise, setDemoExercise] = useState<{ name: string; demoMediaUrl?: string | null } | null>(
     null
   );
 
   // Cronômetro de descanso: dispara sozinho ao marcar uma série como feita
-  // (o mesmo checkbox que já serve de "diário" do treino), usando o tempo
-  // configurado NAQUELA série. null = escondido; ao zerar, a barra some e dá
-  // lugar ao cartão central "Descanso concluído".
+  // (toque no círculo numerado), usando o tempo configurado NAQUELA série.
+  // null = escondido; ao zerar, a barra some e dá lugar ao cartão central
+  // "Descanso concluído".
   const [restTotal, setRestTotal] = useState(DEFAULT_REST_SECONDS);
   const [restRemaining, setRestRemaining] = useState<number | null>(null);
   const [restPaused, setRestPaused] = useState(false);
@@ -188,12 +369,10 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
 
   // Dois Animated.Value por exercício, criados sob demanda: a posição
   // (deslocamento vertical em px, com física de mola) e um "lift" leve (escala)
-  // que dá a sensação de o card se soltar e pousar no lugar novo — sem cor.
+  // que dá a sensação de o bloco se soltar e pousar no lugar novo — sem cor.
   const reorderAnimsRef = useRef<Record<string, Animated.Value>>({});
   const liftAnimsRef = useRef<Record<string, Animated.Value>>({});
   const rowHeightsRef = useRef<Record<string, number>>({});
-  const EXERCISE_ROW_GAP = 10; // == exerciseRow.marginBottom
-
   function getReorderAnim(exerciseId: string) {
     if (!reorderAnimsRef.current[exerciseId]) {
       reorderAnimsRef.current[exerciseId] = new Animated.Value(0);
@@ -222,17 +401,12 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
     Animated.timing(lift, { toValue: 0, duration: 320, useNativeDriver: true }).start();
   }
 
-  function hoverHandlers(controlId: string) {
-    return {
-      onHoverIn: () => setHoveredControl(controlId),
-      onHoverOut: () => setHoveredControl((prev) => (prev === controlId ? null : prev)),
-    };
-  }
-
   useEffect(() => {
     if (visible) {
       const base = initialWorkout ?? EMPTY_DRAFT;
       setDraft({ ...base, exercises: collapseAllButFirst(base.exercises) });
+      setEditingLabelSetId(null);
+      setOpenCount((c) => c + 1);
     } else {
       setRestRemaining(null);
       setRestCompleteInfo(null);
@@ -252,10 +426,11 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
   }
 
   function handleAddExercise(item: ExerciseCatalogItem) {
+    scrollListToTop();
     setDraft((prev) => ({
       ...prev,
       exercises: [
-        ...prev.exercises.map((e) => ({ ...e, collapsed: true })),
+        ...prev.exercises,
         {
           id: `we-${item.id}-${Date.now()}`,
           exerciseId: item.id,
@@ -263,7 +438,8 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
           muscleGroup: item.muscleGroup,
           demoMediaUrl: item.demoMediaUrl ?? null,
           sets: makeDefaultSets(3),
-          collapsed: false,
+          // Só o primeiro da lista fica aberto; os demais entram recolhidos.
+          collapsed: prev.exercises.length > 0,
           done: false,
         },
       ],
@@ -329,38 +505,29 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
     }));
   }
 
-  function updateSetReps(exerciseId: string, setId: string, delta: number) {
+  function updateSet(exerciseId: string, setId: string, patch: Partial<SetTarget>) {
     setDraft((prev) => ({
       ...prev,
       exercises: prev.exercises.map((e) =>
         e.id !== exerciseId
           ? e
-          : {
-              ...e,
-              sets: e.sets.map((s) =>
-                s.id === setId ? { ...s, reps: Math.max(1, Math.min(50, s.reps + delta)) } : s
-              ),
-            }
+          : { ...e, sets: e.sets.map((s) => (s.id === setId ? { ...s, ...patch } : s)) }
       ),
     }));
   }
 
-  function updateSetWeight(exerciseId: string, setId: string, delta: number) {
-    setDraft((prev) => ({
-      ...prev,
-      exercises: prev.exercises.map((e) =>
-        e.id !== exerciseId
-          ? e
-          : {
-              ...e,
-              sets: e.sets.map((s) =>
-                s.id === setId
-                  ? { ...s, weightKg: Math.round(Math.max(0, Math.min(500, s.weightKg + delta)) * 10) / 10 }
-                  : s
-              ),
-            }
-      ),
-    }));
+  function setRepsExact(exerciseId: string, setId: string, reps: number) {
+    updateSet(exerciseId, setId, { reps: Math.max(1, Math.min(50, Math.round(reps))) });
+  }
+
+  function setWeightExact(exerciseId: string, setId: string, weightKg: number) {
+    updateSet(exerciseId, setId, {
+      weightKg: Math.round(Math.max(0, Math.min(500, weightKg)) * 10) / 10,
+    });
+  }
+
+  function setRestExact(exerciseId: string, setId: string, seconds: number) {
+    updateSet(exerciseId, setId, { restSeconds: Math.max(15, Math.min(600, seconds)) });
   }
 
   function updateSetRest(exerciseId: string, setId: string, delta: number) {
@@ -381,139 +548,13 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
     }));
   }
 
-  function setWeightExact(exerciseId: string, setId: string, weightKg: number) {
-    setDraft((prev) => ({
-      ...prev,
-      exercises: prev.exercises.map((e) =>
-        e.id !== exerciseId
-          ? e
-          : {
-              ...e,
-              sets: e.sets.map((s) =>
-                s.id === setId
-                  ? { ...s, weightKg: Math.round(Math.max(0, Math.min(500, weightKg)) * 10) / 10 }
-                  : s
-              ),
-            }
-      ),
-    }));
-  }
-
-  function startEditingWeight(setId: string, currentValue: number) {
-    setWeightDraft(String(currentValue));
-    setEditingWeightSetId(setId);
-  }
-
-  function commitWeightEdit(exerciseId: string, setId: string) {
-    const parsed = Number(weightDraft.replace(",", "."));
-    if (!Number.isNaN(parsed)) {
-      setWeightExact(exerciseId, setId, parsed);
-    }
-    setEditingWeightSetId(null);
-  }
-
-  function startEditingRest(setId: string, currentValue: number) {
-    setRestDraft(String(currentValue));
-    setEditingRestSetId(setId);
-  }
-
-  // Aceita vários jeitos de digitar, porque cada aluno pensa num formato
-  // diferente: "90" ou "60s" = segundos; "1m"/"1min" = minutos; "1:30" =
-  // mm:ss; e "1,5" (vírgula OU ponto, sem sufixo) = minutos decimais — é a
-  // vírgula que converte pra quem prefere pensar em minutos (1,5 = 1min30s)
-  // sem atrapalhar quem digita direto em segundos (60 continua sendo 60s).
-  function parseRestInput(text: string): number | null {
-    const raw = text.trim();
-    if (!raw) return null;
-
-    if (raw.includes(":")) {
-      const [mStr, sStr] = raw.split(":");
-      const m = Number(mStr);
-      const s = Number(sStr);
-      if (Number.isNaN(m) || Number.isNaN(s)) return null;
-      return Math.round(m * 60 + s);
-    }
-
-    const lower = raw.toLowerCase().replace(",", ".");
-
-    if (lower.endsWith("min")) {
-      const n = Number(lower.slice(0, -3));
-      return Number.isNaN(n) ? null : Math.round(n * 60);
-    }
-    if (lower.endsWith("m")) {
-      const n = Number(lower.slice(0, -1));
-      return Number.isNaN(n) ? null : Math.round(n * 60);
-    }
-    if (lower.endsWith("seg")) {
-      const n = Number(lower.slice(0, -3));
-      return Number.isNaN(n) ? null : Math.round(n);
-    }
-    if (lower.endsWith("s")) {
-      const n = Number(lower.slice(0, -1));
-      return Number.isNaN(n) ? null : Math.round(n);
-    }
-
-    const n = Number(lower);
-    if (Number.isNaN(n)) return null;
-    const isMinutesDecimal = raw.includes(",") || raw.includes(".");
-    return Math.round(isMinutesDecimal ? n * 60 : n);
-  }
-
-  function commitRestEdit(exerciseId: string, setId: string) {
-    const parsed = parseRestInput(restDraft);
-    if (parsed !== null) {
-      setDraft((prev) => ({
-        ...prev,
-        exercises: prev.exercises.map((e) =>
-          e.id !== exerciseId
-            ? e
-            : {
-                ...e,
-                sets: e.sets.map((s) =>
-                  s.id === setId ? { ...s, restSeconds: Math.max(15, Math.min(600, parsed)) } : s
-                ),
-              }
-        ),
-      }));
-    }
-    setEditingRestSetId(null);
-  }
-
   function toggleSetDone(exerciseId: string, setId: string) {
-    let justCompletedRestSeconds: number | null = null;
-    setDraft((prev) => ({
-      ...prev,
-      exercises: prev.exercises.map((e) =>
-        e.id !== exerciseId
-          ? e
-          : {
-              ...e,
-              sets: e.sets.map((s) => {
-                if (s.id !== setId) return s;
-                const nextDone = !s.done;
-                if (nextDone) justCompletedRestSeconds = s.restSeconds;
-                return { ...s, done: nextDone };
-              }),
-            }
-      ),
-    }));
-    if (justCompletedRestSeconds !== null) {
-      startRestTimer(exerciseId, setId, justCompletedRestSeconds);
-    }
-  }
-
-  function updateSetLabel(exerciseId: string, setId: string, label: string) {
-    setDraft((prev) => ({
-      ...prev,
-      exercises: prev.exercises.map((e) =>
-        e.id !== exerciseId
-          ? e
-          : {
-              ...e,
-              sets: e.sets.map((s) => (s.id === setId ? { ...s, label } : s)),
-            }
-      ),
-    }));
+    const exercise = draft.exercises.find((e) => e.id === exerciseId);
+    const target = exercise?.sets.find((s) => s.id === setId);
+    if (!target) return;
+    const nextDone = !target.done;
+    updateSet(exerciseId, setId, { done: nextDone });
+    if (nextDone) startRestTimer(exerciseId, setId, target.restSeconds);
   }
 
   function moveExercise(id: string, direction: -1 | 1) {
@@ -529,7 +570,7 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
 
       // Quem sobe entra vindo de baixo (offset positivo -> 0); quem desce
       // entra vindo de cima (offset negativo -> 0). A distância de cada um é
-      // o tamanho do outro card, já que é o espaço que ele atravessa.
+      // o tamanho do outro bloco, já que é o espaço que ele atravessa.
       if (direction === -1) {
         slideRowFrom(movedId, otherHeight);
         slideRowFrom(otherId, -movedHeight);
@@ -542,6 +583,49 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
       [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
       return { ...prev, exercises: next };
     });
+  }
+
+  function openExerciseMenu(item: WorkoutExerciseDraft, index: number) {
+    const buttons = [
+      {
+        text: "Ver como fazer",
+        onPress: () => setDemoExercise({ name: item.name, demoMediaUrl: item.demoMediaUrl }),
+      },
+      ...(index > 0
+        ? [{ text: "Mover para cima", onPress: () => moveExercise(item.id, -1) }]
+        : []),
+      ...(index < draft.exercises.length - 1
+        ? [{ text: "Mover para baixo", onPress: () => moveExercise(item.id, 1) }]
+        : []),
+      {
+        text: "Remover exercício",
+        style: "destructive" as const,
+        onPress: () => removeExercise(item.id),
+      },
+      { text: "Cancelar", style: "cancel" as const },
+    ];
+    Alert.alert(item.name, MUSCLE_GROUP_LABELS[item.muscleGroup], buttons);
+  }
+
+  function openSetMenu(item: WorkoutExerciseDraft, set: SetTarget, setIndex: number) {
+    const buttons = [
+      {
+        text: set.done ? "Desmarcar como feita" : "Marcar como feita",
+        onPress: () => toggleSetDone(item.id, set.id),
+      },
+      { text: "Renomear série", onPress: () => setEditingLabelSetId(set.id) },
+      ...(item.sets.length > 1
+        ? [
+            {
+              text: "Excluir série",
+              style: "destructive" as const,
+              onPress: () => removeSetRow(item.id, set.id),
+            },
+          ]
+        : []),
+      { text: "Cancelar", style: "cancel" as const },
+    ];
+    Alert.alert(set.label?.trim() ? set.label : `Série ${setIndex + 1}`, item.name, buttons);
   }
 
   async function handleSave() {
@@ -569,76 +653,79 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <View style={[styles.header, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
+          <View style={[styles.header, { maxWidth: formWidth, alignSelf: "center", width: "100%" }]}>
             <Pressable
-              style={styles.backButton}
+              style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
               onPress={onClose}
-              {...hoverHandlers("header-cancel")}
               hitSlop={8}
-              accessibilityLabel="Voltar"
+              accessibilityLabel="Fechar"
             >
-              {({ pressed }: { pressed: boolean }) => {
-                const active = pressed || hoveredControl === "header-cancel";
-                return (
-                  <Ionicons
-                    name="chevron-back"
-                    size={26}
-                    color={active ? COLORS.accent : COLORS.textSecondary}
-                  />
-                );
-              }}
+              <Ionicons name="chevron-down" size={22} color={COLORS.textPrimary} />
             </Pressable>
+
             <Text style={styles.headerTitle}>{isEditing ? "Editar treino" : "Novo treino"}</Text>
-            <View style={styles.headerSpacer} />
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.saveButton,
+                canSave ? styles.saveButtonEnabled : styles.saveButtonDisabled,
+                canSave && pressed && styles.saveButtonPressed,
+              ]}
+              onPress={handleSave}
+              disabled={!canSave || saving}
+              hitSlop={8}
+              accessibilityLabel="Salvar treino"
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text style={[styles.saveText, canSave ? styles.saveTextActive : styles.saveTextDisabled]}>
+                  Salvar
+                </Text>
+              )}
+            </Pressable>
           </View>
 
           <FlatList
+            ref={listRef}
+            key={openCount}
             data={draft.exercises}
             keyExtractor={(item) => item.id}
             keyboardShouldPersistTaps="handled"
-            style={{ width: "100%", maxWidth: contentMaxWidth, alignSelf: "center" }}
-            contentContainerStyle={styles.listContent}
+            style={{ width: "100%", maxWidth: formWidth, alignSelf: "center" }}
+            contentContainerStyle={[styles.listContent, { paddingHorizontal: m.sidePadding }]}
             ListHeaderComponent={
               <View>
-                <View style={isWide ? styles.topFieldsRow : undefined}>
-                  <View style={isWide ? styles.topFieldCol : undefined}>
-                    <Text style={styles.label}>Nome do treino</Text>
-                    <TextInput
-                      style={styles.nameInput}
-                      placeholder="Ex: Treino A — Peito e Tríceps"
-                      placeholderTextColor={COLORS.textTertiary}
-                      value={draft.name}
-                      onChangeText={(v) => setDraft((prev) => ({ ...prev, name: v }))}
-                      returnKeyType="done"
-                    />
-                  </View>
+                <TextInput
+                  style={styles.nameInput}
+                  placeholder="Nome do treino"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={draft.name}
+                  onChangeText={(v) => setDraft((prev) => ({ ...prev, name: v }))}
+                  returnKeyType="done"
+                  accessibilityLabel="Nome do treino"
+                />
 
-                  <View style={isWide ? styles.topFieldCol : undefined}>
-                    <Text style={styles.label}>Dias da semana</Text>
-                    <View style={styles.weekdayRow}>
-                      {WEEKDAY_LABELS.map((label, index) => {
-                        const active = draft.weekdays.includes(index);
-                        return (
-                          <Pressable
-                            key={index}
-                            style={[styles.weekdayCircle, active && styles.weekdayCircleActive]}
-                            onPress={() => toggleWeekday(index)}
-                            hitSlop={4}
-                            accessibilityLabel={WEEKDAY_FULL_LABELS[index]}
-                          >
-                            <Text style={[styles.weekdayText, active && styles.weekdayTextActive]}>
-                              {label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </View>
+                <View style={styles.weekdayRow}>
+                  {WEEKDAY_LABELS.map((label, index) => {
+                    const active = draft.weekdays.includes(index);
+                    return (
+                      <Pressable
+                        key={index}
+                        style={[styles.weekdayCircle, active && styles.weekdayCircleActive]}
+                        onPress={() => toggleWeekday(index)}
+                        hitSlop={4}
+                        accessibilityLabel={WEEKDAY_FULL_LABELS[index]}
+                      >
+                        <Text style={[styles.weekdayText, active && styles.weekdayTextActive]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
 
-                <View style={styles.exercisesHeaderRow}>
-                  <Text style={styles.label}>Exercícios ({draft.exercises.length})</Text>
-                </View>
+                <View style={styles.divider} />
               </View>
             }
             renderItem={({ item, index }) => (
@@ -661,41 +748,33 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                   },
                 ]}
               >
-                <View style={styles.exerciseTopRow}>
-                  <View style={styles.reorderCol}>
-                    <Pressable
-                      style={[styles.reorderButton, index === 0 && styles.reorderButtonDisabled]}
-                      onPress={() => moveExercise(item.id, -1)}
-                      disabled={index === 0}
-                      hitSlop={6}
-                    >
-                      <Ionicons name="chevron-up" size={16} color={COLORS.textSecondary} />
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.reorderButton,
-                        index === draft.exercises.length - 1 && styles.reorderButtonDisabled,
-                      ]}
-                      onPress={() => moveExercise(item.id, 1)}
-                      disabled={index === draft.exercises.length - 1}
-                      hitSlop={6}
-                    >
-                      <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-                    </Pressable>
-                  </View>
+                <View style={[styles.exerciseTopRow, { gap: m.rowGap + 4 }]}>
+                  <ExerciseAvatar
+                    size={m.avatar}
+                    uri={item.demoMediaUrl}
+                    onPress={() => setDemoExercise({ name: item.name, demoMediaUrl: item.demoMediaUrl })}
+                  />
 
                   <Pressable
-                    style={{ flex: 1 }}
-                    onPress={() => item.collapsed && setCollapsed(item.id, false)}
+                    style={styles.exerciseTitleWrap}
+                    onPress={() => setCollapsed(item.id, !item.collapsed)}
                   >
-                    <Text style={styles.exerciseName}>{item.name}</Text>
-                    <Text style={styles.exerciseMuscle}>{MUSCLE_GROUP_LABELS[item.muscleGroup]}</Text>
+                    <Text
+                      style={[styles.exerciseName, { fontSize: m.nameFont }]}
+                      numberOfLines={2}
+                      maxFontSizeMultiplier={1.3}
+                    >
+                      {item.name}
+                    </Text>
                     {item.collapsed && (
                       <View style={styles.collapsedSummaryRow}>
                         {item.done && (
                           <Ionicons name="checkmark-circle" size={12} color={COLORS.success} />
                         )}
-                        <Text style={[styles.collapsedSummary, item.done && styles.collapsedSummaryDone]}>
+                        <Text
+                          style={[styles.collapsedSummary, item.done && styles.collapsedSummaryDone]}
+                          numberOfLines={1}
+                        >
                           {item.sets.length} série{item.sets.length !== 1 ? "s" : ""} ·{" "}
                           {item.sets.map((s) => `${s.reps}x${s.weightKg}kg`).join(", ")}
                         </Text>
@@ -704,333 +783,170 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                   </Pressable>
 
                   <Pressable
-                    style={styles.chevronButton}
-                    onPress={() => setCollapsed(item.id, !item.collapsed)}
+                    style={styles.iconButton}
+                    onPress={() => openExerciseMenu(item, index)}
                     hitSlop={6}
+                    accessibilityLabel={`Opções de ${item.name}`}
                   >
-                    <Ionicons
-                      name={item.collapsed ? "chevron-down" : "chevron-up"}
-                      size={18}
-                      color={COLORS.textSecondary}
-                    />
+                    <Ionicons name="ellipsis-vertical" size={20} color={COLORS.accent} />
                   </Pressable>
 
                   <Pressable
-                    style={styles.removeButton}
-                    onPress={() => removeExercise(item.id)}
-                    hitSlop={4}
+                    style={styles.iconButton}
+                    onPress={() => setCollapsed(item.id, !item.collapsed)}
+                    hitSlop={6}
+                    accessibilityLabel={item.collapsed ? "Expandir" : "Recolher"}
                   >
-                    <Ionicons name="trash-outline" size={18} color={COLORS.accent} />
+                    <Ionicons
+                      name={item.collapsed ? "chevron-down" : "chevron-up"}
+                      size={24}
+                      color={COLORS.accent}
+                    />
                   </Pressable>
                 </View>
 
                 {!item.collapsed && (
-                  <View style={styles.setsBlock}>
-                    <Pressable
-                      style={({ pressed }) => [styles.demoRow, pressed && styles.demoRowPressed]}
-                      onPress={() =>
-                        setDemoExercise({ name: item.name, demoMediaUrl: item.demoMediaUrl })
-                      }
-                      accessibilityLabel={`Ver como fazer ${item.name}`}
-                    >
-                      <View style={styles.demoThumb}>
-                        <Ionicons name="play" size={16} color={COLORS.accent} />
-                      </View>
-                      <View style={styles.demoTextWrap}>
-                        <Text style={styles.demoTitle}>Como fazer</Text>
-                        <Text style={styles.demoSubtitle}>Vídeo de execução do exercício</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
-                    </Pressable>
+                  <View style={[styles.setsBlock, { gap: m.rowGap }]}>
+                    <View style={[styles.columnHeaderRow, { gap: m.rowGap }]}>
+                      <View style={{ width: m.indexSize }} />
+                      <Text style={[styles.columnHeader, { flex: 1.15 }]} numberOfLines={1}>
+                        {compact ? "Carga" : "Carga · kg"}
+                      </Text>
+                      <Text style={[styles.columnHeader, { flex: 1 }]} numberOfLines={1}>
+                        Reps
+                      </Text>
+                      <Text style={[styles.columnHeader, { flex: 1 }]} numberOfLines={1}>
+                        Descanso
+                      </Text>
+                      <View style={{ width: m.menuWidth }} />
+                    </View>
 
                     {item.sets.map((set, setIndex) => {
                       const defaultLabel = `Série ${setIndex + 1}`;
                       const isEditingLabel = editingLabelSetId === set.id;
+                      const hasLabel = !!set.label?.trim();
                       return (
-                      <View key={set.id} style={[styles.setLine, set.done && styles.setLineDone]}>
-                        <View style={styles.setTopRow}>
-                          <View style={styles.setLabelRow}>
-                            {isEditingLabel ? (
-                              <>
-                                <TextInput
-                                  style={styles.setLabelInput}
-                                  value={set.label ?? ""}
-                                  onChangeText={(v) => updateSetLabel(item.id, set.id, v)}
-                                  placeholder={defaultLabel}
-                                  placeholderTextColor={COLORS.textTertiary}
-                                  autoFocus
-                                  returnKeyType="done"
-                                  onSubmitEditing={() => setEditingLabelSetId(null)}
-                                />
-                                <Pressable
-                                  style={({ pressed }) => [
-                                    styles.confirmLabelButton,
-                                    (pressed || hoveredControl === `confirm-${set.id}`) &&
-                                      styles.confirmLabelButtonActive,
-                                  ]}
-                                  onPress={() => setEditingLabelSetId(null)}
-                                  {...hoverHandlers(`confirm-${set.id}`)}
-                                  hitSlop={8}
-                                >
-                                  {({ pressed }: { pressed: boolean }) => (
-                                    <Ionicons
-                                      name="checkmark"
-                                      size={14}
-                                      color={
-                                        pressed || hoveredControl === `confirm-${set.id}`
-                                          ? "#FFF"
-                                          : COLORS.success
-                                      }
-                                    />
-                                  )}
-                                </Pressable>
-                              </>
-                            ) : (
-                              <>
-                                <Text style={styles.setLineLabel} numberOfLines={1}>
-                                  {set.label?.trim() ? set.label : defaultLabel}
+                        <View key={set.id} style={styles.setBlock}>
+                          {(hasLabel || isEditingLabel) && (
+                            <View style={[styles.setLabelRow, { paddingLeft: m.indexSize + m.rowGap }]}>
+                              {isEditingLabel ? (
+                                <>
+                                  <TextInput
+                                    style={styles.setLabelInput}
+                                    value={set.label ?? ""}
+                                    onChangeText={(v) => updateSet(item.id, set.id, { label: v })}
+                                    placeholder={defaultLabel}
+                                    placeholderTextColor={COLORS.textTertiary}
+                                    autoFocus
+                                    returnKeyType="done"
+                                    onSubmitEditing={() => setEditingLabelSetId(null)}
+                                    onBlur={() => setEditingLabelSetId(null)}
+                                  />
+                                  <Pressable
+                                    style={styles.confirmLabelButton}
+                                    onPress={() => setEditingLabelSetId(null)}
+                                    hitSlop={8}
+                                    accessibilityLabel="Confirmar nome da série"
+                                  >
+                                    <Ionicons name="checkmark" size={14} color={COLORS.success} />
+                                  </Pressable>
+                                </>
+                              ) : (
+                                <Text style={styles.setLabelText} numberOfLines={1}>
+                                  {set.label}
                                 </Text>
-                                <Pressable
-                                  style={({ pressed }) => [
-                                    styles.editLabelButton,
-                                    (pressed || hoveredControl === `edit-${set.id}`) &&
-                                      styles.editLabelButtonActive,
-                                  ]}
-                                  onPress={() => setEditingLabelSetId(set.id)}
-                                  {...hoverHandlers(`edit-${set.id}`)}
-                                  hitSlop={8}
-                                >
-                                  {({ pressed }: { pressed: boolean }) => (
-                                    <Ionicons
-                                      name="create-outline"
-                                      size={14}
-                                      color={
-                                        pressed || hoveredControl === `edit-${set.id}`
-                                          ? COLORS.accent
-                                          : COLORS.textTertiary
-                                      }
-                                    />
-                                  )}
-                                </Pressable>
-                              </>
-                            )}
-                          </View>
-
-                        </View>
-
-                        <View style={styles.setBottomRow}>
-                          <View style={styles.setField}>
-                          <Text style={styles.setFieldLabel}>Repetições</Text>
-                          <View style={styles.stepper}>
-                            <Pressable
-                              style={styles.stepperButton}
-                              onPress={() => updateSetReps(item.id, set.id, -1)}
-                              disabled={set.done}
-                              hitSlop={6}
-                            >
-                              <Ionicons
-                                name="remove"
-                                size={16}
-                                color={set.done ? COLORS.textTertiary : COLORS.textPrimary}
-                              />
-                            </Pressable>
-                            <Text style={styles.stepperValue}>{set.reps}</Text>
-                            <Pressable
-                              style={styles.stepperButton}
-                              onPress={() => updateSetReps(item.id, set.id, 1)}
-                              disabled={set.done}
-                              hitSlop={6}
-                            >
-                              <Ionicons
-                                name="add"
-                                size={16}
-                                color={set.done ? COLORS.textTertiary : COLORS.textPrimary}
-                              />
-                            </Pressable>
-                          </View>
-                          </View>
-
-                          <View style={styles.setField}>
-                          <Text style={styles.setFieldLabel}>Carga · kg</Text>
-                          <View style={styles.stepper}>
-                            <Pressable
-                              style={styles.stepperButton}
-                              onPress={() => updateSetWeight(item.id, set.id, -2.5)}
-                              disabled={set.done}
-                              hitSlop={6}
-                            >
-                              <Ionicons
-                                name="remove"
-                                size={16}
-                                color={set.done ? COLORS.textTertiary : COLORS.textPrimary}
-                              />
-                            </Pressable>
-                            {editingWeightSetId === set.id ? (
-                              <TextInput
-                                style={styles.stepperInput}
-                                value={weightDraft}
-                                onChangeText={setWeightDraft}
-                                keyboardType="decimal-pad"
-                                autoFocus
-                                selectTextOnFocus
-                                returnKeyType="done"
-                                onSubmitEditing={() => commitWeightEdit(item.id, set.id)}
-                                onBlur={() => commitWeightEdit(item.id, set.id)}
-                              />
-                            ) : (
-                              <Pressable
-                                style={styles.weightValueButton}
-                                onPress={() => !set.done && startEditingWeight(set.id, set.weightKg)}
-                                disabled={set.done}
-                                hitSlop={4}
-                              >
-                                <Text style={styles.stepperValue}>{set.weightKg}</Text>
-                              </Pressable>
-                            )}
-                            <Pressable
-                              style={styles.stepperButton}
-                              onPress={() => updateSetWeight(item.id, set.id, 2.5)}
-                              disabled={set.done}
-                              hitSlop={6}
-                            >
-                              <Ionicons
-                                name="add"
-                                size={16}
-                                color={set.done ? COLORS.textTertiary : COLORS.textPrimary}
-                              />
-                            </Pressable>
-                          </View>
-                          </View>
-                        </View>
-
-                        <View style={styles.setMetaRow}>
-                          <View style={styles.restTimeChip}>
-                            <Text style={styles.restLabel}>Descanso</Text>
-                            <Ionicons
-                              name="timer-outline"
-                              size={13}
-                              color={set.done ? COLORS.textTertiary : COLORS.textSecondary}
-                            />
-                            {editingRestSetId === set.id ? (
-                              <TextInput
-                                style={styles.restTimeInput}
-                                value={restDraft}
-                                onChangeText={setRestDraft}
-                                keyboardType="decimal-pad"
-                                autoFocus
-                                selectTextOnFocus
-                                returnKeyType="done"
-                                onSubmitEditing={() => commitRestEdit(item.id, set.id)}
-                                onBlur={() => commitRestEdit(item.id, set.id)}
-                              />
-                            ) : (
-                              <Pressable
-                                onPress={() => !set.done && startEditingRest(set.id, set.restSeconds)}
-                                disabled={set.done}
-                                hitSlop={4}
-                              >
-                                <Text
-                                  style={[styles.restTimeText, set.done && styles.restTimeTextDone]}
-                                >
-                                  {formatRest(set.restSeconds)}
-                                </Text>
-                              </Pressable>
-                            )}
-                          </View>
-                          <View style={styles.setActions}>
-                            <Pressable
-                              style={({ pressed }) => [
-                                styles.removeSetButton,
-                                (pressed || hoveredControl === `remove-${set.id}`) &&
-                                  styles.removeSetButtonActive,
-                                item.sets.length <= 1 && styles.removeSetButtonDisabled,
-                              ]}
-                              onPress={() => removeSetRow(item.id, set.id)}
-                              accessibilityRole="button"
-                              accessibilityLabel={`Excluir ${defaultLabel}`}
-                              disabled={item.sets.length <= 1}
-                              {...hoverHandlers(`remove-${set.id}`)}
-                              hitSlop={6}
-                            >
-                              {({ pressed }: { pressed: boolean }) => (
-                                <Ionicons
-                                  name="close"
-                                  size={14}
-                                  color={
-                                    pressed || hoveredControl === `remove-${set.id}`
-                                      ? COLORS.accent
-                                      : COLORS.textTertiary
-                                  }
-                                />
                               )}
-                            </Pressable>
+                            </View>
+                          )}
 
+                          <View style={[styles.setLine, { gap: m.rowGap }]}>
                             <Pressable
-                              style={({ pressed }) => [
-                                styles.setDoneButton,
-                                (set.done || pressed || hoveredControl === `done-${set.id}`) &&
-                                  styles.setDoneButtonActive,
+                              style={[
+                                styles.setIndexCircle,
+                                { width: m.indexSize, height: m.indexSize, borderRadius: m.indexSize / 2 },
+                                set.done && styles.setIndexCircleDone,
                               ]}
                               onPress={() => toggleSetDone(item.id, set.id)}
                               accessibilityRole="checkbox"
                               accessibilityState={{ checked: set.done }}
-                              accessibilityLabel={`Marcar ${defaultLabel} como ${set.done ? "pendente" : "concluída"}`}
-                              {...hoverHandlers(`done-${set.id}`)}
-                              hitSlop={6}
+                              accessibilityLabel={`Marcar ${defaultLabel} como ${
+                                set.done ? "pendente" : "concluída"
+                              }`}
+                              hitSlop={4}
                             >
-                              {({ pressed }: { pressed: boolean }) => (
-                                <>
-                                <Ionicons
-                                  name="checkmark"
-                                  size={14}
-                                  color={
-                                    set.done || pressed || hoveredControl === `done-${set.id}`
-                                      ? "#FFF"
-                                      : COLORS.textTertiary
-                                  }
-                                />
-                                <Text style={[styles.setDoneText, (set.done || pressed || hoveredControl === `done-${set.id}`) && styles.setDoneTextActive]}>
-                                  {set.done ? "Feita" : "Concluir"}
-                                </Text>
-                                </>
-                              )}
+                              <Ionicons
+                                name="checkmark"
+                                size={22}
+                                color={set.done ? "#FFF" : COLORS.textTertiary}
+                              />
+                            </Pressable>
+
+                            <NumberPill
+                              flex={1.15}
+                              height={m.pillHeight}
+                              fontSize={m.pillFont}
+                              value={set.weightKg}
+                              parse={parseDecimal}
+                              onCommit={(v) => setWeightExact(item.id, set.id, v)}
+                              disabled={set.done}
+                              accessibilityLabel={`Carga da ${defaultLabel}, em quilos`}
+                            />
+                            <NumberPill
+                              height={m.pillHeight}
+                              fontSize={m.pillFont}
+                              value={set.reps}
+                              parse={parseInteger}
+                              onCommit={(v) => setRepsExact(item.id, set.id, v)}
+                              disabled={set.done}
+                              accessibilityLabel={`Repetições da ${defaultLabel}`}
+                            />
+                            <NumberPill
+                              height={m.pillHeight}
+                              fontSize={m.pillFont}
+                              value={set.restSeconds}
+                              parse={parseRestInput}
+                              onCommit={(v) => setRestExact(item.id, set.id, v)}
+                              suffix="s"
+                              disabled={set.done}
+                              accessibilityLabel={`Descanso da ${defaultLabel}, em segundos`}
+                            />
+
+                            <Pressable
+                              style={[styles.setMenuButton, { width: m.menuWidth, height: m.pillHeight }]}
+                              onPress={() => openSetMenu(item, set, setIndex)}
+                              hitSlop={6}
+                              accessibilityLabel={`Opções da ${defaultLabel}`}
+                            >
+                              <Ionicons name="ellipsis-vertical" size={20} color={COLORS.textPrimary} />
                             </Pressable>
                           </View>
                         </View>
-                      </View>
                       );
                     })}
 
-                    <Pressable style={styles.addSetRowButton} onPress={() => addSetRow(item.id)}>
-                      <Ionicons name="add" size={14} color={COLORS.accent} />
-                      <Text style={styles.addSetRowText}>Adicionar série</Text>
+                    <Pressable
+                      style={({ pressed }) => [styles.addSetRowButton, pressed && styles.addSetRowButtonPressed]}
+                      onPress={() => addSetRow(item.id)}
+                    >
+                      <Ionicons name="add" size={22} color={COLORS.textPrimary} />
+                      <Text style={styles.addSetRowText}>Adicionar Série</Text>
                     </Pressable>
 
                     <Pressable
                       style={({ pressed }) => [
                         styles.doneExerciseButton,
-                        (item.done || pressed || hoveredControl === `done-exercise-${item.id}`) &&
-                          styles.doneExerciseButtonActive,
+                        (item.done || pressed) && styles.doneExerciseButtonActive,
                       ]}
                       onPress={() => markExerciseDone(item.id)}
-                      {...hoverHandlers(`done-exercise-${item.id}`)}
                     >
-                      {({ pressed }: { pressed: boolean }) => {
-                        const active =
-                          item.done || pressed || hoveredControl === `done-exercise-${item.id}`;
-                        return (
-                          <>
-                            <Ionicons
-                              name="checkmark"
-                              size={16}
-                              color={active ? COLORS.success : COLORS.textTertiary}
-                            />
-                            <Text style={[styles.doneExerciseText, active && styles.doneExerciseTextActive]}>
-                              Feito
-                            </Text>
-                          </>
-                        );
-                      }}
+                      <Ionicons
+                        name="checkmark"
+                        size={16}
+                        color={item.done ? COLORS.success : COLORS.textTertiary}
+                      />
+                      <Text style={[styles.doneExerciseText, item.done && styles.doneExerciseTextActive]}>
+                        Feito
+                      </Text>
                     </Pressable>
                   </View>
                 )}
@@ -1038,21 +954,34 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
             )}
             ListEmptyComponent={
               <View style={styles.emptyExercises}>
-                <Text style={styles.emptyExercisesText}>
-                  Nenhum exercício adicionado ainda
-                </Text>
+                <Text style={styles.emptyExercisesText}>Nenhum exercício adicionado ainda</Text>
               </View>
             }
             ListFooterComponent={
-              <Pressable style={styles.addExerciseButton} onPress={() => setPickerVisible(true)}>
-                <Ionicons name="add" size={18} color={COLORS.accent} />
-                <Text style={styles.addExerciseText}>Adicionar exercício</Text>
-              </Pressable>
+              <View style={styles.listFooter}>
+                <Pressable
+                  style={({ pressed }) => [styles.addExerciseButton, pressed && styles.addExerciseButtonPressed]}
+                  onPress={openPicker}
+                >
+                  <Ionicons name="add" size={20} color="#FFF" />
+                  <Text style={styles.addExerciseText}>Adicionar exercício</Text>
+                </Pressable>
+
+                {isEditing && (
+                  <Pressable
+                    style={({ pressed }) => [styles.deleteWorkoutButton, pressed && styles.deleteWorkoutPressed]}
+                    onPress={handleDelete}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={COLORS.accent} />
+                    <Text style={styles.deleteWorkoutText}>Excluir treino</Text>
+                  </Pressable>
+                )}
+              </View>
             }
           />
 
           {restRemaining !== null && restRemaining > 0 && (
-            <View style={[styles.restBar, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
+            <View style={[styles.restBar, { maxWidth: formWidth, alignSelf: "center", width: "100%" }]}>
               <View style={styles.restBarTopRow}>
                 <View style={styles.restBarLabelRow}>
                   <Ionicons name="timer-outline" size={16} color={COLORS.accent} />
@@ -1088,49 +1017,6 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
               </View>
             </View>
           )}
-
-          <View style={[styles.footerBar, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
-            <View style={styles.footerActions}>
-              {isEditing ? (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.headerButton,
-                    styles.headerButtonEnabled,
-                    (pressed || hoveredControl === "delete-workout") && styles.headerButtonPressed,
-                  ]}
-                  onPress={handleDelete}
-                  {...hoverHandlers("delete-workout")}
-                >
-                  <Text style={[styles.headerButtonText, styles.saveTextActive]}>Excluir treino</Text>
-                </Pressable>
-              ) : <View />}
-            <Pressable
-              style={({ pressed }) => [
-                styles.headerButton,
-                canSave ? styles.headerButtonEnabled : styles.headerButtonDisabled,
-                canSave && (pressed || hoveredControl === "footer-save") && styles.headerButtonPressed,
-              ]}
-              onPress={handleSave}
-              disabled={!canSave || saving}
-              {...hoverHandlers("footer-save")}
-              hitSlop={8}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <Text
-                  style={[
-                    styles.headerButtonText,
-                    styles.saveText,
-                    canSave ? styles.saveTextActive : styles.saveTextDisabled,
-                  ]}
-                >
-                  Salvar
-                </Text>
-              )}
-            </Pressable>
-            </View>
-          </View>
         </KeyboardAvoidingView>
 
         {restCompleteInfo && (
@@ -1159,7 +1045,10 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
       <ExercisePickerModal
         visible={pickerVisible}
         alreadyAddedIds={draft.exercises.map((e) => e.exerciseId)}
-        onClose={() => setPickerVisible(false)}
+        onClose={() => {
+          setPickerVisible(false);
+          scrollListToTop();
+        }}
         onAdd={handleAddExercise}
       />
 
@@ -1173,6 +1062,66 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
   );
 }
 
+const EXERCISE_ROW_GAP = 24; // == exerciseRow.marginBottom (usado também na animação de reordenar)
+const PILL_HEIGHT = 48;
+const SET_INDEX_SIZE = 44;
+const SET_MENU_WIDTH = 28;
+const ROW_GAP = 8;
+
+const pillStyles = StyleSheet.create({
+  pill: {
+    height: PILL_HEIGHT,
+    borderRadius: PILL_HEIGHT / 2,
+    borderWidth: 1,
+    borderColor: COLORS.hairline,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    minWidth: 0,
+  },
+  pillDisabled: {
+    borderColor: COLORS.border,
+  },
+  input: {
+    flexShrink: 1,
+    minWidth: 28,
+    textAlign: "center",
+    fontSize: 17, // >=16px evita o zoom automático do Safari/Chrome no celular ao focar
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+    padding: 0,
+    margin: 0,
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
+  },
+  inputDisabled: {
+    color: COLORS.textTertiary,
+  },
+  suffix: {
+    marginLeft: 3,
+    fontSize: 12,
+    color: COLORS.textTertiary,
+  },
+});
+
+const avatarStyles = StyleSheet.create({
+  ring: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: COLORS.hairline,
+    backgroundColor: COLORS.surfaceAlt,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  image: {
+    width: "100%",
+    height: "100%",
+  },
+});
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1182,96 +1131,79 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingTop: 4,
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 12,
   },
-  headerButton: {
-    minWidth: 44,
-    minHeight: 40,
-    paddingHorizontal: 16,
+  closeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.surfaceAlt,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
   },
-  headerButtonEnabled: {
+  closeButtonPressed: {
+    backgroundColor: COLORS.border,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+  },
+  saveButton: {
+    minWidth: 88,
+    height: 44,
+    paddingHorizontal: 20,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  saveButtonEnabled: {
     backgroundColor: COLORS.accent,
   },
-  headerButtonPressed: {
+  saveButtonPressed: {
     backgroundColor: COLORS.accentLight,
   },
-  headerButtonDisabled: {
+  saveButtonDisabled: {
     backgroundColor: COLORS.surfaceAlt,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    alignItems: "flex-start",
-    justifyContent: "center",
-  },
-  headerButtonText: {
-    fontSize: 15,
-    color: COLORS.textSecondary,
-    fontWeight: "600",
-  },
   saveText: {
-    textAlign: "right",
+    fontSize: 16,
+    fontWeight: "700",
   },
   saveTextActive: {
     color: "#FFF",
-    fontWeight: "700",
   },
   saveTextDisabled: {
     color: COLORS.textTertiary,
   },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
   listContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingBottom: 40,
   },
-  topFieldsRow: {
-    flexDirection: "row",
-    gap: 24,
-  },
-  topFieldCol: {
-    flex: 1,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.textSecondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-    marginBottom: 10,
-    marginTop: 20,
-  },
   nameInput: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    height: 52,
-    fontSize: 16, // >=16px evita o zoom automático do Safari/Chrome no celular ao focar
+    fontSize: 22,
+    fontWeight: "600",
     color: COLORS.textPrimary,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
   },
   weekdayRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    paddingHorizontal: 4,
+    paddingBottom: 16,
   },
   weekdayCircle: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.hairline,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1287,27 +1219,31 @@ const styles = StyleSheet.create({
   weekdayTextActive: {
     color: "#FFF",
   },
-  exercisesHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginBottom: 20,
   },
   exerciseRow: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
+    marginBottom: EXERCISE_ROW_GAP,
   },
   exerciseTopRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
+    alignItems: "center",
+    gap: 12,
   },
-  chevronButton: {
-    width: 32,
-    height: 32,
+  exerciseTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  exerciseName: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.accent,
+  },
+  iconButton: {
+    width: 36,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1315,138 +1251,71 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    marginTop: 3,
   },
   collapsedSummary: {
-    fontSize: 11,
+    flexShrink: 1,
+    fontSize: 12,
     color: COLORS.textTertiary,
   },
   collapsedSummaryDone: {
     color: COLORS.success,
   },
-  reorderCol: {
-    gap: 2,
-  },
-  reorderButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: COLORS.surfaceAlt,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  reorderButtonDisabled: {
-    opacity: 0.3,
-  },
-  exerciseName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    marginBottom: 2,
-  },
-  exerciseMuscle: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginBottom: 10,
-  },
   setsBlock: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    gap: 8,
+    marginTop: 16,
+    gap: ROW_GAP,
   },
-  demoRow: {
+  columnHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: COLORS.surfaceAlt,
+    gap: ROW_GAP,
+    paddingBottom: 2,
   },
-  demoRowPressed: {
-    backgroundColor: COLORS.border,
+  columnHeader: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.textTertiary,
+    textAlign: "center",
   },
-  demoThumb: {
-    width: 44,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: COLORS.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  demoTextWrap: {
-    flex: 1,
-  },
-  demoTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  demoSubtitle: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+  setIndexSpacer: { width: SET_INDEX_SIZE },
+  setMenuSpacer: { width: SET_MENU_WIDTH },
+  setBlock: {
+    gap: 6,
   },
   setLine: {
-    gap: 12,
-    borderRadius: 14,
-    padding: 12,
-    backgroundColor: COLORS.background,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: ROW_GAP,
+  },
+  setIndexCircle: {
+    width: SET_INDEX_SIZE,
+    height: SET_INDEX_SIZE,
+    borderRadius: SET_INDEX_SIZE / 2,
     borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  setLineDone: {
-    backgroundColor: "rgba(46, 204, 113, 0.06)",
-    borderColor: "rgba(46, 204, 113, 0.3)",
-  },
-  setTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  setBottomRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 12,
-    rowGap: 8,
-  },
-  setMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: 8,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  setActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  setLabelRow: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  setLineLabel: {
-    flexShrink: 1,
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  editLabelButton: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    borderColor: COLORS.hairline,
     alignItems: "center",
     justifyContent: "center",
   },
-  editLabelButtonActive: {
-    backgroundColor: COLORS.accentMuted,
+  setIndexCircleDone: {
+    backgroundColor: COLORS.success,
+    borderColor: COLORS.success,
+  },
+  setMenuButton: {
+    width: SET_MENU_WIDTH,
+    height: PILL_HEIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  setLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingLeft: SET_INDEX_SIZE + ROW_GAP,
+  },
+  setLabelText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
   },
   setLabelInput: {
     flex: 1,
@@ -1456,68 +1325,34 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.accent,
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
   },
   confirmLabelButton: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
     borderColor: COLORS.border,
   },
-  confirmLabelButtonActive: {
-    backgroundColor: COLORS.success,
-    borderColor: COLORS.success,
-  },
-  removeSetButton: {
-    width: 36,
-    height: 40,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.surfaceAlt,
-  },
-  removeSetButtonActive: {
-    backgroundColor: COLORS.accentMuted,
-  },
-  removeSetButtonDisabled: {
-    opacity: 0.25,
-  },
-  setDoneButton: {
-    paddingHorizontal: 12,
-    height: 40,
-    borderRadius: 10,
-    flexDirection: "row",
-    gap: 5,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.surfaceAlt,
-  },
-  setDoneButtonActive: {
-    backgroundColor: COLORS.success,
-  },
-  setDoneText: { fontSize: 12, fontWeight: "700", color: COLORS.textSecondary },
-  setDoneTextActive: { color: COLORS.background },
-  setField: { flex: 1, minWidth: 110, gap: 6 },
-  setFieldLabel: { fontSize: 11, fontWeight: "600", color: COLORS.textSecondary },
-  weightValueButton: { flex: 1, minHeight: 44, justifyContent: "center" },
-  restLabel: { fontSize: 11, color: COLORS.textSecondary },
   addSetRowButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
     justifyContent: "center",
+    gap: 8,
+    height: 52,
     marginTop: 4,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
+    borderRadius: 14,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  addSetRowButtonPressed: {
+    backgroundColor: COLORS.border,
   },
   addSetRowText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.accent,
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
   },
   doneExerciseButton: {
     flexDirection: "row",
@@ -1525,9 +1360,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
     height: 40,
-    borderRadius: 10,
-    backgroundColor: COLORS.surfaceAlt,
-    marginTop: 8,
+    borderRadius: 12,
   },
   doneExerciseButtonActive: {
     backgroundColor: "rgba(46, 204, 113, 0.1)",
@@ -1535,101 +1368,62 @@ const styles = StyleSheet.create({
   doneExerciseText: {
     fontSize: 13,
     fontWeight: "700",
-    color: COLORS.textSecondary,
+    color: COLORS.textTertiary,
   },
   doneExerciseTextActive: {
     color: COLORS.success,
-  },
-  stepper: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: COLORS.surfaceAlt,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  stepperButton: {
-    width: 32,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepperValue: {
-    minWidth: 18,
-    textAlign: "center",
-    fontSize: 18,
-    fontFamily: FONT_MONO,
-    fontVariant: ["tabular-nums"],
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  stepperInput: {
-    flex: 1,
-    minWidth: 0,
-    height: 44,
-    textAlign: "center",
-    fontSize: 16, // >=16px evita o zoom automático do Safari/Chrome no celular ao focar
-    fontFamily: FONT_MONO,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    padding: 0,
-    margin: 0,
-    borderWidth: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.accent,
-  },
-  restTimeChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    minHeight: 40,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    backgroundColor: COLORS.surfaceAlt,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  restTimeText: {
-    fontSize: 12,
-    fontFamily: FONT_MONO,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  restTimeTextDone: {
-    color: COLORS.textTertiary,
-  },
-  restTimeInput: {
-    width: 34,
-    height: 20,
-    textAlign: "center",
-    fontSize: 16, // >=16px evita o zoom automático do Safari/Chrome no celular ao focar
-    fontFamily: FONT_MONO,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    padding: 0,
-    margin: 0,
-    borderWidth: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.accent,
-  },
-  removeButton: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
   },
   emptyExercises: {
     paddingVertical: 24,
     alignItems: "center",
   },
   emptyExercisesText: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textTertiary,
   },
+  listFooter: {
+    marginTop: 16,
+    gap: 12,
+  },
+  addExerciseButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: COLORS.accent,
+  },
+  addExerciseButtonPressed: {
+    backgroundColor: COLORS.accentLight,
+  },
+  addExerciseText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+  deleteWorkoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.accentMuted,
+  },
+  deleteWorkoutPressed: {
+    backgroundColor: COLORS.accentMuted,
+  },
+  deleteWorkoutText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.accent,
+  },
   restBar: {
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     marginTop: 8,
+    marginBottom: 8,
     padding: 14,
     borderRadius: 16,
     backgroundColor: COLORS.surface,
@@ -1765,37 +1559,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#FFF",
-  },
-  footerBar: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: COLORS.background,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  addExerciseButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    height: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: COLORS.accent,
-  },
-  addExerciseText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.accent,
-  },
-  headerSpacer: {
-    width: 44,
-  },
-  footerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
   },
 });

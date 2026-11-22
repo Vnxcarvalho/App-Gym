@@ -4,15 +4,20 @@
 // renderiza um modal no estilo do app sempre que algo chama Alert.alert —
 // substitui o Alert nativo (no-op no navegador) e o window.confirm/alert
 // (feio e trava a página) por algo consistente com o resto da UI.
+//
+// Dois formatos:
+//  - até 2 botões: diálogo de confirmação centralizado, botões lado a lado;
+//  - 3+ botões: menu de ações em lista vertical (bottom sheet no celular,
+//    cartão centralizado em tela larga), com "Cancelar" separado no fim.
 import React, { useEffect, useState } from "react";
-import { Modal, View, Text, Pressable, StyleSheet } from "react-native";
+import { Modal, View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { COLORS } from "../constants/theme";
 import { subscribeAlert, dismissAlert, AlertState, AlertButton } from "../lib/alert";
 import { useResponsive } from "../hooks/useResponsive";
 
 export default function AlertHost() {
   const [state, setState] = useState<AlertState | null>(null);
-  const { contentMaxWidth } = useResponsive();
+  const { isTablet, height } = useResponsive();
 
   useEffect(() => subscribeAlert(setState), []);
 
@@ -24,11 +29,87 @@ export default function AlertHost() {
   }
 
   const cancelButton = state.buttons.find((b) => b.style === "cancel");
+  const isMenu = state.buttons.length > 2;
+  const sheet = isMenu && !isTablet; // menu ancorado embaixo só no celular
+
+  if (isMenu) {
+    const actions = state.buttons.filter((b) => b.style !== "cancel");
+    return (
+      <Modal
+        visible
+        transparent
+        animationType="fade"
+        onRequestClose={() => cancelButton && handlePress(cancelButton)}
+      >
+        <Pressable
+          style={[styles.backdrop, sheet && styles.backdropSheet]}
+          onPress={() => cancelButton && handlePress(cancelButton)}
+        >
+          {/* Pressable interno impede que tocar no cartão feche o menu */}
+          <Pressable
+            style={[styles.menuCard, sheet ? styles.menuCardSheet : styles.menuCardCentered]}
+            onPress={() => {}}
+          >
+            {sheet && <View style={styles.grabber} />}
+
+            <View style={styles.menuHeader}>
+              <Text style={styles.menuTitle} numberOfLines={2}>
+                {state.title}
+              </Text>
+              {state.message ? (
+                <Text style={styles.menuMessage} numberOfLines={2}>
+                  {state.message}
+                </Text>
+              ) : null}
+            </View>
+
+            <ScrollView
+              style={{ maxHeight: Math.max(200, height * 0.55) }}
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.actionsGroup}>
+                {actions.map((button, index) => {
+                  const destructive = button.style === "destructive";
+                  return (
+                    <Pressable
+                      key={index}
+                      style={({ pressed }) => [
+                        styles.actionRow,
+                        index > 0 && styles.actionRowDivider,
+                        pressed && styles.actionRowPressed,
+                      ]}
+                      onPress={() => handlePress(button)}
+                      accessibilityRole="button"
+                    >
+                      <Text style={[styles.actionText, destructive && styles.actionTextDestructive]}>
+                        {button.text}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            {cancelButton && (
+              <Pressable
+                style={({ pressed }) => [styles.cancelRow, pressed && styles.actionRowPressed]}
+                onPress={() => handlePress(cancelButton)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.cancelText}>{cancelButton.text}</Text>
+              </Pressable>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    );
+  }
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={() => cancelButton && handlePress(cancelButton)}>
       <View style={styles.backdrop}>
-        <View style={[styles.card, { maxWidth: Math.min(360, contentMaxWidth) }]}>
+        <View style={styles.card}>
           <Text style={styles.title}>{state.title}</Text>
           {state.message ? <Text style={styles.message}>{state.message}</Text> : null}
 
@@ -70,8 +151,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
   },
+  backdropSheet: {
+    justifyContent: "flex-end",
+    padding: 0,
+  },
+
+  // ----- Diálogo de confirmação (1–2 botões) -----
   card: {
     width: "100%",
+    maxWidth: 360,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -102,7 +190,8 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    height: 46,
+    minHeight: 46,
+    paddingHorizontal: 8,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
@@ -125,11 +214,103 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: COLORS.textSecondary,
+    textAlign: "center",
   },
   primaryText: {
     color: "#FFF",
   },
   destructiveText: {
     color: COLORS.accent,
+  },
+
+  // ----- Menu de ações (3+ botões) -----
+  menuCard: {
+    width: "100%",
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  menuCardSheet: {
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 28,
+  },
+  menuCardCentered: {
+    maxWidth: 380,
+    borderRadius: 22,
+    paddingTop: 20,
+  },
+  grabber: {
+    alignSelf: "center",
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.hairline,
+    marginBottom: 12,
+  },
+  menuHeader: {
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingBottom: 14,
+    gap: 2,
+  },
+  menuTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
+  menuMessage: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+  },
+  actionsGroup: {
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: "hidden",
+  },
+  actionRow: {
+    minHeight: 54,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  actionRowPressed: {
+    backgroundColor: COLORS.border,
+  },
+  actionText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
+  actionTextDestructive: {
+    color: COLORS.accent,
+  },
+  cancelRow: {
+    minHeight: 54,
+    marginTop: 10,
+    borderRadius: 16,
+    backgroundColor: COLORS.surfaceAlt,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
   },
 });
