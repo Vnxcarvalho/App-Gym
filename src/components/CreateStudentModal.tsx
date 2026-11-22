@@ -132,7 +132,7 @@ export default function CreateStudentModal({ visible, onClose, onCreated }: Prop
               disabled={!canSubmit || submitting}
             >
               {submitting ? (
-                <ActivityIndicator color="#FFF" size="small" />
+                <ActivityIndicator color={COLORS.onAccent} size="small" />
               ) : (
                 <Text style={styles.submitButtonText}>Cadastrar</Text>
               )}
@@ -196,5 +196,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   submitButtonDisabled: { backgroundColor: COLORS.surfaceAlt },
-  submitButtonText: { color: "#FFF", fontSize: 15, fontWeight: "700" },
+  submitButtonText: { color: COLORS.onAccent, fontSize: 15, fontWeight: "700" },
 });

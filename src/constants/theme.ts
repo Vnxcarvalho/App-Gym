@@ -1,22 +1,26 @@
 import { Platform } from "react-native";
 
+// Paleta suavizada: fundo grafite (não preto puro), superfícies em degraus
+// sutis, texto levemente off-white e acentos menos saturados — contraste
+// confortável sem perder a identidade vermelha.
 export const COLORS = {
-  background: "#000000",
-  surface: "#060606",
-  surfaceAlt: "#0B0B0B",
-  border: "#161616",
-  // linha/traço que precisa ser visível mesmo sobre superfícies quase pretas
+  background: "#0E0E10",
+  surface: "#161619",
+  surfaceAlt: "#1D1D21",
+  border: "#27272C",
+  // linha/traço que precisa ser visível mesmo sobre superfícies escuras
   // (contorno de botão vazio, trilho de progresso) — branco translúcido, não cinza próprio
-  hairline: "rgba(255, 255, 255, 0.14)",
-  textPrimary: "#F5F5F5",
-  textSecondary: "rgba(245, 245, 245, 0.6)", // hierarquia por opacidade do branco, não cinza próprio
-  textTertiary: "rgba(245, 245, 245, 0.36)",
-  accent: "#E8102A", // vermelho vibrante (CTA) — contrast 4.54:1 on background, 4.38:1 on surface
-  accentLight: "#FF4D5E", // passo mais claro da mesma matiz, usado só no estado selecionado/pressed
-  accentMuted: "#3A1015", // fundo sutil do accent
-  success: "#2ECC71",
-  water: "#3AA0FF", // azul — reservado pra meta de água, não disputa com o vermelho do treino
-  waterMuted: "#132840",
+  hairline: "rgba(255, 255, 255, 0.12)",
+  textPrimary: "#E8E8EA",
+  textSecondary: "rgba(232, 232, 234, 0.62)", // hierarquia por opacidade do branco, não cinza próprio
+  textTertiary: "rgba(232, 232, 234, 0.40)",
+  accent: "#E32424", // vermelho vivo (G=B, sem tom rosa/laranja) — ~4.1:1 sobre o fundo, ok pra texto em negrito/grande e ícones
+  accentLight: "#F04545", // passo mais claro da mesma matiz, usado só no estado selecionado/pressed
+  accentMuted: "#2E1414", // fundo sutil do accent
+  onAccent: "#F7F3F3", // texto/ícone sobre fundo accent — off-white, não branco puro
+  success: "#4CAF7A",
+  water: "#4A9BE0", // azul — reservado pra meta de água, não disputa com o vermelho do treino
+  waterMuted: "#16293D",
 };
 
 // Fonte tabular pros números de treino (peso, reps, cronômetro) — alinhamento

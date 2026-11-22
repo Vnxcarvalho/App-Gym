@@ -130,7 +130,7 @@ export default function AdminScreen() {
             onPress={() => setCreateVisible(true)}
             accessibilityLabel="Cadastrar aluno"
           >
-            <Ionicons name="person-add-outline" size={16} color="#FFF" />
+            <Ionicons name="person-add-outline" size={16} color={COLORS.onAccent} />
             <Text style={styles.addStudentButtonText}>Aluno</Text>
           </Pressable>
         </View>
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: COLORS.accent,
   },
-  addStudentButtonText: { fontSize: 12, fontWeight: "700", color: "#FFF" },
+  addStudentButtonText: { fontSize: 12, fontWeight: "700", color: COLORS.onAccent },
   subtitle: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 16, lineHeight: 18 },
   searchBox: {
     flexDirection: "row",

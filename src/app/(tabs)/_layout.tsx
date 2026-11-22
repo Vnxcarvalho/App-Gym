@@ -27,7 +27,7 @@ function ViewingAsBanner() {
 
   return (
     <View style={[bannerStyles.banner, { paddingTop: insets.top + 8 }]}>
-      <Ionicons name="eye-outline" size={14} color="#FFF" />
+      <Ionicons name="eye-outline" size={14} color={COLORS.onAccent} />
       <Text style={bannerStyles.text} numberOfLines={1}>
         Visualizando como <Text style={bannerStyles.textBold}>{viewingUser.name}</Text>
       </Text>
@@ -99,7 +99,7 @@ const bannerStyles = StyleSheet.create({
   text: {
     flex: 1,
     fontSize: 12,
-    color: "#FFF",
+    color: COLORS.onAccent,
   },
   textBold: {
     fontWeight: "700",
@@ -113,6 +113,6 @@ const bannerStyles = StyleSheet.create({
   exitText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#FFF",
+    color: COLORS.onAccent,
   },
 });

@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, FONT_MONO } from "../constants/theme";
 import { MUSCLE_GROUP_LABELS } from "../constants/muscleGroups";
 import { Alert } from "../lib/alert";
@@ -131,7 +132,13 @@ function buildSessionExercises(
 
 export default function ActiveWorkoutScreen() {
   const router = useRouter();
-  const { contentMaxWidth } = useResponsive();
+  const { contentMaxWidth, width } = useResponsive();
+  const insets = useSafeAreaInsets();
+  // formulário de uso rápido: em tela larga não precisa esticar além disso
+  const formWidth = Math.min(contentMaxWidth, 640);
+  // celulares estreitos (iPhone SE/mini, Android compacto): menos padding e campos mais enxutos
+  const compact = width < 380;
+  const sidePadding = compact ? 14 : 20;
   const params = useLocalSearchParams<{ workoutId?: string }>();
   const workoutId = Array.isArray(params.workoutId) ? params.workoutId[0] : params.workoutId;
   const { workouts, loading: workoutsLoading } = useWorkouts();
@@ -306,15 +313,30 @@ export default function ActiveWorkoutScreen() {
     );
   }
 
+
+  const progress = totalSets ? completedSets / totalSets : 0;
+  const centered = { maxWidth: formWidth, alignSelf: "center" as const, width: "100%" as const };
+  const inputPad = compact ? 10 : 12;
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={handleDiscard} hitSlop={12}>
-          <Ionicons name="close" size={26} color={COLORS.textSecondary} />
+      {/* Header — respeita notch/Dynamic Island (a tela é fullScreenModal, sem header nativo) */}
+      <View
+        style={[
+          styles.header,
+          { paddingTop: insets.top + 8, paddingHorizontal: sidePadding },
+        ]}
+      >
+        <Pressable
+          style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}
+          onPress={handleDiscard}
+          hitSlop={8}
+          accessibilityLabel="Descartar treino"
+        >
+          <Ionicons name="close" size={22} color={COLORS.textPrimary} />
         </Pressable>
 
         <View style={styles.headerCenter}>
@@ -324,122 +346,181 @@ export default function ActiveWorkoutScreen() {
           <Text style={styles.headerTimer}>{formatElapsed(elapsed)}</Text>
         </View>
 
-        <Pressable style={styles.finishButton} onPress={handleFinish}>
-          <Text style={styles.finishButtonText}>Finalizar</Text>
-        </Pressable>
+        {/* Espelha o botão de fechar pra manter o título realmente centralizado */}
+        <View style={styles.headerSpacer} />
       </View>
 
       {/* Progress bar */}
-      <View style={[styles.progressTrack, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}>
-        <View
-          style={[
-            styles.progressFill,
-            { width: `${totalSets ? (completedSets / totalSets) * 100 : 0}%` },
-          ]}
-        />
+      <View style={[styles.progressTrack, centered]}>
+        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
-      <Text
-        style={[styles.progressLabel, { maxWidth: contentMaxWidth, alignSelf: "center", width: "100%" }]}
-      >
-        {completedSets}/{totalSets} séries concluídas
-      </Text>
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContentOuter}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        automaticallyAdjustKeyboardInsets
       >
-        <View style={[styles.scrollContent, { maxWidth: contentMaxWidth }]}>
-        {exercises.map((exercise) => (
-          <View key={exercise.workoutExerciseId} style={styles.exerciseCard}>
-            <View style={styles.exerciseHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.exerciseName}>{exercise.name}</Text>
-                <View style={styles.exerciseMetaRow}>
-                  <View style={styles.muscleBadge}>
-                    <Text style={styles.muscleBadgeText}>
-                      {MUSCLE_GROUP_LABELS[exercise.muscleGroup] ?? exercise.muscleGroup}
-                    </Text>
-                  </View>
-                  {exercise.targetRepsLabel && (
-                    <Text style={styles.targetText}>
-                      Alvo: {exercise.targetSets}x{exercise.targetRepsLabel}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            </View>
-
-            <Pressable
-              style={({ pressed }) => [styles.demoRow, pressed && styles.demoRowPressed]}
-              onPress={() => setDemoExercise(exercise)}
-              accessibilityLabel={`Ver como fazer ${exercise.name}`}
-            >
-              <View style={styles.demoThumb}>
-                <Ionicons name="play" size={16} color={COLORS.textPrimary} />
-              </View>
-              <View style={styles.demoTextWrap}>
-                <Text style={styles.demoTitle}>Como fazer</Text>
-                <Text style={styles.demoSubtitle}>Vídeo de execução do exercício</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
-            </Pressable>
-
-            {/* Table header */}
-            <View style={styles.setsHeaderRow}>
-              <Text style={[styles.setsHeaderCell, { width: 40 }]}>SÉRIE</Text>
-              <Text style={[styles.setsHeaderCell, { flex: 1 }]}>KG</Text>
-              <Text style={[styles.setsHeaderCell, { flex: 1 }]}>REPS</Text>
-              <Text style={[styles.setsHeaderCell, { width: 40, textAlign: "center" }]}>OK</Text>
-            </View>
-
-            {exercise.sets.map((set) => (
+        <View
+          style={[
+            styles.scrollContent,
+            { maxWidth: formWidth, paddingHorizontal: sidePadding },
+          ]}
+        >
+          {exercises.map((exercise) => {
+            const doneCount = exercise.sets.filter((s) => s.completed).length;
+            const allDone = exercise.sets.length > 0 && doneCount === exercise.sets.length;
+            return (
               <View
-                key={set.id}
-                style={[styles.setRow, set.completed && styles.setRowCompleted]}
+                key={exercise.workoutExerciseId}
+                style={[
+                  styles.exerciseCard,
+                  compact && styles.exerciseCardCompact,
+                  allDone && styles.exerciseCardDone,
+                ]}
               >
-                <Text style={styles.setNumber}>{set.setNumber}</Text>
+                <View style={styles.exerciseHeader}>
+                  <View style={styles.exerciseTitleWrap}>
+                    <Text style={styles.exerciseName} numberOfLines={2} maxFontSizeMultiplier={1.3}>
+                      {exercise.name}
+                    </Text>
+                    <View style={styles.exerciseMetaRow}>
+                      <View style={styles.muscleBadge}>
+                        <Text style={styles.muscleBadgeText} numberOfLines={1}>
+                          {MUSCLE_GROUP_LABELS[exercise.muscleGroup] ?? exercise.muscleGroup}
+                        </Text>
+                      </View>
+                      {!!exercise.targetRepsLabel && (
+                        <Text style={styles.targetText}>
+                          Alvo: {exercise.targetSets}x{exercise.targetRepsLabel}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
 
-                <TextInput
-                  style={styles.setInput}
-                  placeholder={set.targetWeightKg != null ? String(set.targetWeightKg) : "0"}
-                  placeholderTextColor={COLORS.textTertiary}
-                  keyboardType="decimal-pad"
-                  value={set.weightKg}
-                  editable={!set.completed}
-                  onChangeText={(v) =>
-                    updateSet(exercise.workoutExerciseId, set.id, { weightKg: v })
-                  }
-                />
+                  <View
+                    style={[styles.progressChip, allDone && styles.progressChipDone]}
+                    accessibilityLabel={`${doneCount} de ${exercise.sets.length} séries concluídas`}
+                  >
+                    {allDone ? (
+                      <Ionicons name="checkmark" size={14} color={COLORS.onAccent} />
+                    ) : (
+                      <Text style={styles.progressChipText}>
+                        {doneCount}/{exercise.sets.length}
+                      </Text>
+                    )}
+                  </View>
 
-                <TextInput
-                  style={styles.setInput}
-                  placeholder={set.targetReps != null ? String(set.targetReps) : "0"}
-                  placeholderTextColor={COLORS.textTertiary}
-                  keyboardType="number-pad"
-                  value={set.reps}
-                  editable={!set.completed}
-                  onChangeText={(v) => updateSet(exercise.workoutExerciseId, set.id, { reps: v })}
-                />
+                  <Pressable
+                    style={({ pressed }) => [styles.demoButton, pressed && styles.demoButtonPressed]}
+                    onPress={() => setDemoExercise(exercise)}
+                    hitSlop={6}
+                    accessibilityLabel={`Ver como fazer ${exercise.name}`}
+                  >
+                    <Ionicons name="play" size={16} color={COLORS.accent} />
+                  </Pressable>
+                </View>
+
+                {/* Table header */}
+                <View style={styles.setsHeaderRow}>
+                  <Text style={[styles.setsHeaderCell, styles.setNumberCol]}>SÉRIE</Text>
+                  <Text style={[styles.setsHeaderCell, styles.inputCol]}>KG</Text>
+                  <Text style={[styles.setsHeaderCell, styles.inputCol]}>REPS</Text>
+                  <Text style={[styles.setsHeaderCell, styles.checkCol]}>OK</Text>
+                </View>
+
+                {exercise.sets.map((set) => (
+                  <View key={set.id} style={[styles.setRow, set.completed && styles.setRowCompleted]}>
+                    <Text style={[styles.setNumber, styles.setNumberCol]}>{set.setNumber}</Text>
+
+                    <TextInput
+                      style={[
+                        styles.setInput,
+                        { paddingVertical: inputPad },
+                        set.completed && styles.setInputCompleted,
+                      ]}
+                      placeholder={set.targetWeightKg != null ? String(set.targetWeightKg) : "0"}
+                      placeholderTextColor={COLORS.textTertiary}
+                      keyboardType="decimal-pad"
+                      value={set.weightKg}
+                      editable={!set.completed}
+                      selectTextOnFocus
+                      maxFontSizeMultiplier={1.2}
+                      accessibilityLabel={`Carga da série ${set.setNumber}, em quilos`}
+                      onChangeText={(v) =>
+                        updateSet(exercise.workoutExerciseId, set.id, { weightKg: v })
+                      }
+                    />
+
+                    <TextInput
+                      style={[
+                        styles.setInput,
+                        { paddingVertical: inputPad },
+                        set.completed && styles.setInputCompleted,
+                      ]}
+                      placeholder={set.targetReps != null ? String(set.targetReps) : "0"}
+                      placeholderTextColor={COLORS.textTertiary}
+                      keyboardType="number-pad"
+                      value={set.reps}
+                      editable={!set.completed}
+                      selectTextOnFocus
+                      maxFontSizeMultiplier={1.2}
+                      accessibilityLabel={`Repetições da série ${set.setNumber}`}
+                      onChangeText={(v) => updateSet(exercise.workoutExerciseId, set.id, { reps: v })}
+                    />
+
+                    <Pressable
+                      style={[styles.checkCircle, set.completed && styles.checkCircleDone]}
+                      onPress={() => toggleSetCompleted(exercise, set)}
+                      hitSlop={6}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: set.completed }}
+                      accessibilityLabel={`Marcar série ${set.setNumber} como ${
+                        set.completed ? "pendente" : "concluída"
+                      }`}
+                    >
+                      <Ionicons
+                        name="checkmark"
+                        size={22}
+                        color={set.completed ? COLORS.onAccent : COLORS.textTertiary}
+                      />
+                    </Pressable>
+                  </View>
+                ))}
 
                 <Pressable
-                  style={[styles.checkCircle, set.completed && styles.checkCircleDone]}
-                  onPress={() => toggleSetCompleted(exercise, set)}
-                  hitSlop={8}
+                  style={({ pressed }) => [styles.addSetButton, pressed && styles.addSetButtonPressed]}
+                  onPress={() => addSet(exercise.workoutExerciseId)}
                 >
-                  {set.completed && <Ionicons name="checkmark" size={16} color="#FFF" />}
+                  <Ionicons name="add" size={20} color={COLORS.textPrimary} />
+                  <Text style={styles.addSetText}>Adicionar série</Text>
                 </Pressable>
               </View>
-            ))}
-
-            <Pressable style={styles.addSetButton} onPress={() => addSet(exercise.workoutExerciseId)}>
-              <Ionicons name="add" size={16} color={COLORS.accent} />
-              <Text style={styles.addSetText}>Adicionar série</Text>
-            </Pressable>
-          </View>
-        ))}
+            );
+          })}
         </View>
       </ScrollView>
+
+      {/* Barra inferior — "Finalizar" na zona de alcance do polegar */}
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <View style={[styles.bottomBarInner, centered, { paddingHorizontal: sidePadding }]}>
+          <View style={styles.bottomProgress}>
+            <Text style={styles.bottomProgressValue}>
+              {completedSets}/{totalSets}
+            </Text>
+            <Text style={styles.bottomProgressLabel}>séries concluídas</Text>
+          </View>
+          <Pressable
+            style={({ pressed }) => [styles.finishButton, pressed && styles.finishButtonPressed]}
+            onPress={handleFinish}
+            accessibilityLabel="Finalizar treino"
+          >
+            <Ionicons name="flag" size={16} color={COLORS.onAccent} />
+            <Text style={styles.finishButtonText}>Finalizar</Text>
+          </Pressable>
+        </View>
+      </View>
 
       <ExerciseDemoModal
         visible={!!demoExercise}
@@ -450,6 +531,9 @@ export default function ActiveWorkoutScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+const CHECK_SIZE = 40;
+const NUMBER_COL = 40;
 
 const styles = StyleSheet.create({
   container: {
@@ -464,9 +548,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 16,
     paddingBottom: 12,
+  },
+  closeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.surfaceAlt,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closeButtonPressed: {
+    backgroundColor: COLORS.border,
+  },
+  headerSpacer: {
+    width: 44,
   },
   headerCenter: {
     flex: 1,
@@ -474,56 +570,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   headerTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
     color: COLORS.textPrimary,
   },
   headerTimer: {
-    fontSize: 12,
-    fontFamily: FONT_MONO,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  finishButton: {
-    backgroundColor: COLORS.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  finishButtonText: {
-    color: "#FFF",
     fontSize: 13,
-    fontWeight: "700",
+    fontFamily: FONT_MONO,
+    fontVariant: ["tabular-nums"],
+    color: COLORS.accent,
+    marginTop: 2,
   },
   progressTrack: {
     height: 4,
     backgroundColor: COLORS.hairline,
-    marginHorizontal: 20,
-    borderRadius: 2,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
     backgroundColor: COLORS.accent,
   },
-  progressLabel: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginHorizontal: 20,
-    marginTop: 6,
-  },
   scroll: {
     flex: 1,
-    marginTop: 12,
   },
   scrollContentOuter: {
     alignItems: "center",
   },
   scrollContent: {
     width: "100%",
-    padding: 20,
-    paddingBottom: 48,
-    gap: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+    gap: 14,
   },
   exerciseCard: {
     backgroundColor: COLORS.surface,
@@ -532,53 +609,32 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     padding: 16,
   },
+  exerciseCardCompact: {
+    padding: 12,
+    borderRadius: 16,
+  },
+  exerciseCardDone: {
+    borderColor: "rgba(76, 175, 122, 0.35)",
+  },
   exerciseHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 8,
-    marginBottom: 6,
-  },
-  demoRow: {
-    flexDirection: "row",
-    alignItems: "center",
     gap: 10,
-    padding: 10,
     marginBottom: 12,
-    borderRadius: 12,
-    backgroundColor: COLORS.surfaceAlt,
   },
-  demoRowPressed: {
-    backgroundColor: COLORS.border,
-  },
-  demoThumb: {
-    width: 44,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: COLORS.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  demoTextWrap: {
+  exerciseTitleWrap: {
     flex: 1,
-  },
-  demoTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
-  demoSubtitle: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+    minWidth: 0,
   },
   exerciseName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "700",
     color: COLORS.textPrimary,
     marginBottom: 6,
   },
   exerciseMetaRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 8,
   },
@@ -599,53 +655,91 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
   },
+  progressChip: {
+    minWidth: 40,
+    height: 28,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    backgroundColor: COLORS.surfaceAlt,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  progressChipDone: {
+    backgroundColor: COLORS.success,
+    borderColor: COLORS.success,
+  },
+  progressChipText: {
+    fontSize: 12,
+    fontWeight: "700",
+    fontFamily: FONT_MONO,
+    color: COLORS.textSecondary,
+  },
+  demoButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.accentMuted,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  demoButtonPressed: {
+    opacity: 0.75,
+  },
   setsHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 6,
-    gap: 10,
+    gap: 8,
   },
   setsHeaderCell: {
     fontSize: 11,
     fontWeight: "700",
-    color: COLORS.textSecondary,
+    color: COLORS.textTertiary,
     letterSpacing: 0.4,
   },
+  setNumberCol: { width: NUMBER_COL },
+  inputCol: { flex: 1, textAlign: "center" },
+  checkCol: { width: CHECK_SIZE, textAlign: "center" },
   setRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
+    gap: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   setRowCompleted: {
-    backgroundColor: "rgba(46, 204, 113, 0.06)",
+    backgroundColor: "rgba(76, 175, 122, 0.06)",
   },
   setNumber: {
-    width: 40,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: FONT_MONO,
     fontWeight: "600",
     color: COLORS.textSecondary,
+    paddingLeft: 4,
   },
   setInput: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: COLORS.surfaceAlt,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
     color: COLORS.textPrimary,
-    paddingVertical: 8,
     paddingHorizontal: 10,
-    fontSize: 16, // >=16px evita o zoom automático do Safari/Chrome no celular ao focar
+    fontSize: 17, // >=16px evita o zoom automático do Safari/Chrome no celular ao focar
     fontFamily: FONT_MONO,
     textAlign: "center",
   },
+  setInputCompleted: {
+    color: COLORS.textSecondary,
+  },
   checkCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1.5,
+    width: CHECK_SIZE,
+    height: CHECK_SIZE,
+    borderRadius: CHECK_SIZE / 2,
+    borderWidth: 1,
     borderColor: COLORS.hairline,
     alignItems: "center",
     justifyContent: "center",
@@ -657,13 +751,63 @@ const styles = StyleSheet.create({
   addSetButton: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
-    alignSelf: "flex-start",
+    height: 48,
     marginTop: 10,
+    borderRadius: 14,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  addSetButtonPressed: {
+    backgroundColor: COLORS.border,
   },
   addSetText: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "600",
-    color: COLORS.accent,
+    color: COLORS.textPrimary,
+  },
+  bottomBar: {
+    backgroundColor: COLORS.background,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 12,
+  },
+  bottomBarInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  bottomProgress: {
+    minWidth: 0,
+  },
+  bottomProgressValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    fontFamily: FONT_MONO,
+    color: COLORS.textPrimary,
+  },
+  bottomProgressLabel: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  finishButton: {
+    flex: 1,
+    maxWidth: 220,
+    height: 52,
+    borderRadius: 26,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: COLORS.accent,
+  },
+  finishButtonPressed: {
+    backgroundColor: COLORS.accentLight,
+  },
+  finishButtonText: {
+    color: COLORS.onAccent,
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

@@ -60,7 +60,7 @@ function WorkoutCard({
           }}
           accessibilityLabel={`Excluir treino ${workout.name}`}
         >
-          <Ionicons name="trash-outline" size={22} color="#FFF" />
+          <Ionicons name="trash-outline" size={22} color={COLORS.onAccent} />
         </Pressable>
       )}
       overshootRight={false}
@@ -229,7 +229,7 @@ export default function WorkoutsScreen() {
                 style={({ pressed }) => [styles.emptyButton, pressed && styles.emptyButtonPressed]}
                 onPress={openCreate}
               >
-                <Ionicons name="add" size={20} color="#FFF" />
+                <Ionicons name="add" size={20} color={COLORS.onAccent} />
                 <Text style={styles.emptyButtonText}>Criar treino</Text>
               </Pressable>
             </View>
@@ -248,7 +248,7 @@ export default function WorkoutsScreen() {
         hitSlop={8}
         accessibilityLabel="Criar novo treino"
       >
-        <Ionicons name="add" size={28} color="#FFF" />
+        <Ionicons name="add" size={28} color={COLORS.onAccent} />
       </Pressable>
 
       <WorkoutFormModal
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
   },
   weekdayDotTextActive: {
-    color: "#FFF",
+    color: COLORS.onAccent,
   },
   swipeDelete: {
     width: 76,
@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#FFF",
+    color: COLORS.onAccent,
   },
   fab: {
     position: "absolute",
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0px 4px 12px rgba(232, 16, 42, 0.4)",
+    boxShadow: "0px 4px 12px rgba(227, 36, 36, 0.28)",
     elevation: 6,
   },
   fabPressed: {

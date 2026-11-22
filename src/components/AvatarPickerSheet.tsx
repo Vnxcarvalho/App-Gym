@@ -118,7 +118,7 @@ export default function AvatarPickerSheet({
               {currentAvatarUrl && (
                 <Pressable style={styles.option} onPress={handleRemove}>
                   <View style={[styles.optionIconCircle, styles.optionIconCircleDanger]}>
-                    <Ionicons name="trash-outline" size={24} color="#FF4D4D" />
+                    <Ionicons name="trash-outline" size={24} color="#E84040" />
                   </View>
                   <Text style={[styles.optionLabel, styles.optionLabelDanger]}>Remover</Text>
                 </Pressable>
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   optionIconCircleDanger: {
-    backgroundColor: "rgba(255,77,77,0.12)",
+    backgroundColor: "rgba(232,64,64,0.12)",
   },
   optionLabel: {
     fontSize: 12,
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   optionLabelDanger: {
-    color: "#FF4D4D",
+    color: "#E84040",
   },
   cancelButton: {
     height: 48,

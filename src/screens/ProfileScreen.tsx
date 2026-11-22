@@ -189,7 +189,7 @@ export default function ProfileScreen() {
             <Ionicons name="person" size={36} color={COLORS.textTertiary} />
           )}
           <View style={styles.avatarEditOverlay}>
-            <Ionicons name="camera" size={14} color="#FFF" />
+            <Ionicons name="camera" size={14} color={COLORS.onAccent} />
           </View>
         </Pressable>
         <Text style={styles.name}>{profile.name}</Text>

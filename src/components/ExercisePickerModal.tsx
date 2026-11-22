@@ -292,7 +292,7 @@ export default function ExercisePickerModal({ visible, alreadyAddedIds, onClose,
                       disabled={!customName.trim() || !customMuscle || submittingCustom}
                     >
                       {submittingCustom ? (
-                        <ActivityIndicator color="#FFF" size="small" />
+                        <ActivityIndicator color={COLORS.onAccent} size="small" />
                       ) : (
                         <Text style={styles.createConfirmText}>Adicionar</Text>
                       )}
@@ -345,7 +345,7 @@ export default function ExercisePickerModal({ visible, alreadyAddedIds, onClose,
                   <Ionicons
                     name={added ? "checkmark" : "add"}
                     size={20}
-                    color={added ? COLORS.success : "#FFF"}
+                    color={added ? COLORS.success : COLORS.onAccent}
                   />
                 </Pressable>
               </View>
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
   createConfirmText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#FFF",
+    color: COLORS.onAccent,
   },
   groupHeader: {
     fontSize: 12,
@@ -640,7 +640,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   doneButtonText: {
-    color: "#FFF",
+    color: COLORS.onAccent,
     fontSize: 15,
     fontWeight: "700",
   },

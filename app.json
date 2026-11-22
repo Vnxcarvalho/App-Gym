@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "gymtracker",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#000000",
+    "backgroundColor": "#0E0E10",
     "ios": {
       "icon": "./assets/expo.icon"
     },
@@ -34,7 +34,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#000000",
+          "backgroundColor": "#0E0E10",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }

@@ -234,7 +234,7 @@ export default function AvatarEditModal({ visible, uri, onCancel, onConfirm }: P
           </Pressable>
           <Pressable style={styles.confirmButton} onPress={handleConfirm} disabled={saving || !naturalSize}>
             {saving ? (
-              <ActivityIndicator color="#FFF" size="small" />
+              <ActivityIndicator color={COLORS.onAccent} size="small" />
             ) : (
               <Text style={styles.confirmText}>Usar foto</Text>
             )}
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#FFF",
+    color: COLORS.onAccent,
     marginBottom: 20,
   },
   frameWrapper: {
@@ -343,6 +343,6 @@ const styles = StyleSheet.create({
   confirmText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#FFF",
+    color: COLORS.onAccent,
   },
 });

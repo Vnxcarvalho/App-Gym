@@ -123,7 +123,7 @@ export default function DashboardScreen({ onStartWorkout, onProfilePress }: Prop
               sua rotina de segunda a domingo aparece aqui.
             </Text>
             <Pressable style={styles.emptyCta} onPress={openCreate}>
-              <Ionicons name="add" size={18} color="#FFF" />
+              <Ionicons name="add" size={18} color={COLORS.onAccent} />
               <Text style={styles.emptyCtaText}>Adicionar treino</Text>
             </Pressable>
           </View>
@@ -212,7 +212,7 @@ export default function DashboardScreen({ onStartWorkout, onProfilePress }: Prop
             style={styles.startButton}
             onPress={() => todayWorkout.id && onStartWorkout?.(todayWorkout.id)}
           >
-            <Ionicons name="play" size={18} color="#FFF" />
+            <Ionicons name="play" size={18} color={COLORS.onAccent} />
           </Pressable>
         </View>
       ) : (
@@ -228,7 +228,7 @@ export default function DashboardScreen({ onStartWorkout, onProfilePress }: Prop
           onPress={() => todayWorkout.id && onStartWorkout?.(todayWorkout.id)}
         >
           <Text style={styles.ctaText}>Iniciar Treino</Text>
-          <Ionicons name="arrow-forward" size={18} color="#FFF" />
+          <Ionicons name="arrow-forward" size={18} color={COLORS.onAccent} />
         </Pressable>
       )}
 
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
   dayPill: { flex: 1, alignItems: "center", gap: 8 },
   dayLabel: { fontSize: 11, fontWeight: "600", color: COLORS.textSecondary },
   dayDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.border },
-  dayDotTrained: { backgroundColor: "rgba(232, 16, 42, 0.35)" },
+  dayDotTrained: { backgroundColor: "rgba(227, 36, 36, 0.32)" },
   dayDotToday: { backgroundColor: COLORS.accent, width: 10, height: 10, borderRadius: 5 },
   dayDotRest: { backgroundColor: "transparent", borderWidth: 1, borderColor: COLORS.border },
   todayCard: {
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 16,
   },
-  ctaText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
+  ctaText: { color: COLORS.onAccent, fontSize: 16, fontWeight: "700" },
   emptyState: {
     flex: 1,
     alignItems: "center",
@@ -381,5 +381,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     height: 52,
   },
-  emptyCtaText: { color: "#FFF", fontSize: 15, fontWeight: "700" },
+  emptyCtaText: { color: COLORS.onAccent, fontSize: 15, fontWeight: "700" },
 });

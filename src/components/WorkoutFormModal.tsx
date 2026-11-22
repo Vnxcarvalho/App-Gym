@@ -677,7 +677,7 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
               accessibilityLabel="Salvar treino"
             >
               {saving ? (
-                <ActivityIndicator size="small" color="#FFF" />
+                <ActivityIndicator size="small" color={COLORS.onAccent} />
               ) : (
                 <Text style={[styles.saveText, canSave ? styles.saveTextActive : styles.saveTextDisabled]}>
                   Salvar
@@ -877,7 +877,7 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                               <Ionicons
                                 name="checkmark"
                                 size={22}
-                                color={set.done ? "#FFF" : COLORS.textTertiary}
+                                color={set.done ? COLORS.onAccent : COLORS.textTertiary}
                               />
                             </Pressable>
 
@@ -963,7 +963,7 @@ export default function WorkoutFormModal({ visible, initialWorkout, onClose, onS
                   style={({ pressed }) => [styles.addExerciseButton, pressed && styles.addExerciseButtonPressed]}
                   onPress={openPicker}
                 >
-                  <Ionicons name="add" size={20} color="#FFF" />
+                  <Ionicons name="add" size={20} color={COLORS.onAccent} />
                   <Text style={styles.addExerciseText}>Adicionar exercício</Text>
                 </Pressable>
 
@@ -1175,7 +1175,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   saveTextActive: {
-    color: "#FFF",
+    color: COLORS.onAccent,
   },
   saveTextDisabled: {
     color: COLORS.textTertiary,
@@ -1217,7 +1217,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   weekdayTextActive: {
-    color: "#FFF",
+    color: COLORS.onAccent,
   },
   divider: {
     height: 1,
@@ -1363,7 +1363,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   doneExerciseButtonActive: {
-    backgroundColor: "rgba(46, 204, 113, 0.1)",
+    backgroundColor: "rgba(76, 175, 122, 0.1)",
   },
   doneExerciseText: {
     fontSize: 13,
@@ -1400,7 +1400,7 @@ const styles = StyleSheet.create({
   addExerciseText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#FFF",
+    color: COLORS.onAccent,
   },
   deleteWorkoutButton: {
     flexDirection: "row",
@@ -1489,7 +1489,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(4, 4, 5, 0.72)",
+    backgroundColor: "rgba(8, 8, 10, 0.72)",
     alignItems: "center",
     justifyContent: "center",
     padding: 32,
@@ -1558,6 +1558,6 @@ const styles = StyleSheet.create({
   restCompletePrimaryText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#FFF",
+    color: COLORS.onAccent,
   },
 });

@@ -145,7 +145,7 @@ export default function LoginScreen() {
           disabled={!canSubmit || loading}
         >
           {loading ? (
-            <ActivityIndicator color="#FFF" />
+            <ActivityIndicator color={COLORS.onAccent} />
           ) : (
             <Text style={styles.submitText}>{isSignUp ? "Criar conta" : "Entrar"}</Text>
           )}
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceAlt,
   },
   submitText: {
-    color: "#FFF",
+    color: COLORS.onAccent,
     fontSize: 15,
     fontWeight: "700",
   },

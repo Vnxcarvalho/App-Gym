@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   primaryText: {
-    color: "#FFF",
+    color: COLORS.onAccent,
   },
   destructiveText: {
     color: COLORS.accent,
