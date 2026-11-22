@@ -45,6 +45,7 @@ example
 
 .vercel
 .env*
+!.env.example
 
 # Supabase CLI
 supabase/.temp/
